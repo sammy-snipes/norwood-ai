@@ -17,7 +17,7 @@ class Settings(BaseSettings):
     CELERY_RESULT_BACKEND: str = os.getenv("CELERY_RESULT_BACKEND", "redis://localhost:6379/0")
 
     class Config:
-        env_file = "backend/.env"
+        env_file = ".env"
         extra = "ignore"
 
     @property

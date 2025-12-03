@@ -38,7 +38,7 @@ help:
 .PHONY: install
 install:
 	@echo "Installing Python dependencies..."
-	uv sync --project backend
+	uv sync
 	@echo "Installing frontend dependencies..."
 	cd frontend && npm install
 	@echo "Installation complete."
@@ -98,12 +98,12 @@ services-status:
 .PHONY: run-app
 run-app: build-frontend
 	@echo "Starting FastAPI backend with built frontend..."
-	uv run --project backend uvicorn app.main:app --reload --host 0.0.0.0 --port 8000
+	uv run uvicorn app.main:app --reload --host 0.0.0.0 --port 8000
 
 .PHONY: run-celery
 run-celery: ensure-redis
 	@echo "Starting Celery worker..."
-	uv run --project backend celery -A app.celery_worker.celery_app worker --loglevel=info --concurrency=2
+	uv run celery -A app.celery_worker.celery_app worker --loglevel=info --concurrency=2
 
 .PHONY: run-frontend
 run-frontend:

@@ -35,7 +35,7 @@ app.add_middleware(
 )
 
 # Serve static frontend files if they exist (built Vue app)
-STATIC_DIR = FilePath(__file__).parent.parent.parent / "frontend" / "dist"
+STATIC_DIR = FilePath(__file__).parent.parent / "frontend" / "dist"
 if STATIC_DIR.exists():
     logger.info(f"[DEBUG] Serving static files from {STATIC_DIR}")
     app.mount("/assets", StaticFiles(directory=STATIC_DIR / "assets"), name="assets")
