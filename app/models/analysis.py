@@ -13,7 +13,8 @@ class Analysis(Base):
     image_url = Column(Text, nullable=True)  # S3 path
     norwood_stage = Column(Integer, nullable=False)
     confidence = Column(String(20), nullable=False)  # high, medium, low
-    roast = Column(Text, nullable=False)
+    title = Column(String(100), nullable=False)
+    analysis_text = Column(Text, nullable=False)
     reasoning = Column(Text, nullable=True)
     created_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False, index=True)
 

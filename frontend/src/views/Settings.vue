@@ -1,9 +1,14 @@
 <script setup>
+import { computed } from 'vue'
 import { useRouter } from 'vue-router'
 import { useAuthStore } from '../stores/auth'
 
 const router = useRouter()
 const authStore = useAuthStore()
+
+const hasUnlimited = computed(() => {
+  return authStore.user?.is_admin || authStore.user?.is_premium
+})
 
 const handleLogout = () => {
   authStore.logout()
@@ -14,33 +19,43 @@ const handleLogout = () => {
 <template>
   <div class="min-h-screen bg-gray-900 text-white">
     <!-- Header -->
-    <header class="border-b border-gray-800 px-6 py-4">
-      <div class="max-w-6xl mx-auto flex items-center justify-between">
-        <div class="flex items-center gap-8">
-          <router-link to="/analyze" class="flex items-center gap-2">
-            <span class="font-bold text-xl">Norwood AI</span>
+    <header class="border-b border-gray-800 px-4 py-2">
+      <div class="flex items-center justify-between">
+        <div class="flex items-center gap-6">
+          <router-link to="/analyze" class="font-medium text-sm">
+            Norwood AI
           </router-link>
-          <nav class="flex gap-6">
-            <router-link to="/analyze" class="text-sm text-gray-500 hover:text-gray-300 transition-colors">
+          <nav class="flex gap-4">
+            <router-link to="/analyze" class="text-xs text-gray-500 hover:text-gray-300 transition-colors">
               Analyze
             </router-link>
-            <router-link to="/settings" class="text-sm text-white transition-colors">
+            <router-link to="/settings" class="text-xs text-gray-400 hover:text-white transition-colors">
               Settings
             </router-link>
           </nav>
         </div>
-        <div class="flex items-center gap-4">
+        <div class="flex items-center gap-3">
+          <!-- Tier badge -->
+          <span v-if="hasUnlimited" class="text-xs text-purple-400">
+            {{ authStore.user?.is_admin ? 'Admin' : 'Premium' }}
+          </span>
+          <span v-else-if="authStore.user?.free_analyses_remaining > 0" class="text-xs text-gray-500">
+            {{ authStore.user?.free_analyses_remaining }} free
+          </span>
+          <span v-else class="text-xs text-orange-400">
+            0 remaining
+          </span>
           <div class="flex items-center gap-2">
             <img
               v-if="authStore.user?.avatar_url"
               :src="authStore.user.avatar_url"
-              class="w-8 h-8 rounded-full"
+              class="w-5 h-5 rounded-full"
             />
-            <span class="text-gray-400 text-sm">{{ authStore.user?.name }}</span>
+            <span class="text-gray-500 text-xs">{{ authStore.user?.name }}</span>
           </div>
           <button
             @click="handleLogout"
-            class="text-gray-500 hover:text-gray-300 text-sm"
+            class="text-gray-600 hover:text-gray-400 text-xs"
           >
             Logout
           </button>
