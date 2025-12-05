@@ -7,7 +7,7 @@ class Settings(BaseSettings):
     """Application settings loaded from environment variables."""
 
     # Core
-    ENVIRONMENT: str = "dev"
+    ENV: str = "dev"  # "dev" or "prod"
     LOG_LEVEL: str = "INFO"
 
     # Database
@@ -33,16 +33,26 @@ class Settings(BaseSettings):
 
     # App config
     MAX_IMAGE_SIZE_MB: int = 10
-    ALLOWED_ORIGINS: list[str] = [
-        "http://localhost:5173",
-        "http://127.0.0.1:5173",
-        "http://localhost:8000",
-    ]
-    FRONTEND_URL: str = "http://localhost:8000"
 
     class Config:
         env_file = ".env"
         extra = "ignore"
+
+    @property
+    def is_prod(self) -> bool:
+        return self.ENV == "prod"
+
+    @property
+    def FRONTEND_URL(self) -> str:
+        if self.is_prod:
+            return "https://norwood-ai.com"
+        return "http://localhost:8000"
+
+    @property
+    def ALLOWED_ORIGINS(self) -> list[str]:
+        if self.is_prod:
+            return ["https://norwood-ai.com", "http://norwood-ai.com"]
+        return ["http://localhost:5173", "http://127.0.0.1:5173", "http://localhost:8000"]
 
     @property
     def database_url(self) -> str:
