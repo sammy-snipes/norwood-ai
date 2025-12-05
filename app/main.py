@@ -9,9 +9,12 @@ from fastapi.staticfiles import StaticFiles
 from starlette import status as http_status
 
 from app.celery_worker import celery_app
-from app.config import settings
+from app.config import get_settings
+from app.routers import auth_router
 from app.schemas import AnalyzeResponse, HealthResponse, TaskResponse, TaskStatusResponse
 from app.tasks.analyze import analyze_image_task
+
+settings = get_settings()
 
 logging.basicConfig(level=settings.LOG_LEVEL)
 logger = logging.getLogger(__name__)
@@ -34,11 +37,16 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+# Include routers
+app.include_router(auth_router)
+
 # Serve static frontend files if they exist (built Vue app)
 STATIC_DIR = FilePath(__file__).parent.parent / "frontend" / "dist"
 if STATIC_DIR.exists():
     logger.info(f"[DEBUG] Serving static files from {STATIC_DIR}")
     app.mount("/assets", StaticFiles(directory=STATIC_DIR / "assets"), name="assets")
+    if (STATIC_DIR / "img").exists():
+        app.mount("/img", StaticFiles(directory=STATIC_DIR / "img"), name="img")
 
 
 @app.get("/health", response_model=HealthResponse)

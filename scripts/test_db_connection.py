@@ -7,15 +7,17 @@ import os
 import boto3
 import psycopg2
 
-AWS_PROFILE = os.environ.get("AWS_PROFILE", "norwood")
+AWS_PROFILE = os.environ.get("AWS_PROFILE", "")  # Empty = use instance role on EC2
 AWS_REGION = os.environ.get("AWS_REGION", "us-east-1")
 RDS_INSTANCE_ID = "norwood-db1"
 SECRET_NAME = "rds!db-772d01d0-2a2c-4a0a-b7c3-e24f1c38f0c1"
 
 
 def get_aws_session():
-    """Create boto3 session with profile."""
-    return boto3.Session(profile_name=AWS_PROFILE, region_name=AWS_REGION)
+    """Create boto3 session. Uses instance role on EC2, profile locally if set."""
+    if AWS_PROFILE:
+        return boto3.Session(profile_name=AWS_PROFILE, region_name=AWS_REGION)
+    return boto3.Session(region_name=AWS_REGION)
 
 
 def get_db_credentials():
@@ -78,7 +80,7 @@ def test_connection(endpoint: str, port: int, credentials: dict):
 
 
 if __name__ == "__main__":
-    print(f"Using AWS Profile: {AWS_PROFILE}")
+    print(f"Using AWS Profile: {AWS_PROFILE or '(instance role)'}")
     print(f"Using AWS Region: {AWS_REGION}")
     print(f"RDS Instance: {RDS_INSTANCE_ID}")
     print(f"Secret: {SECRET_NAME}\n")

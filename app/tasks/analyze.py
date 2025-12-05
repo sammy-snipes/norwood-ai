@@ -4,7 +4,9 @@ import logging
 import anthropic
 
 from app.celery_worker import celery_app
-from app.config import settings
+from app.config import get_settings
+
+settings = get_settings()
 
 logger = logging.getLogger(__name__)
 

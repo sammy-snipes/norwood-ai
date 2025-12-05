@@ -26,6 +26,9 @@ help:
 	@echo "  stop-redis        Stop Redis container"
 	@echo "  services-status   Check status of Redis container"
 	@echo ""
+	@echo "---------------- Database -----------------"
+	@echo "  migrate           Run all SQL migrations"
+	@echo ""
 	@echo "---------------- Run Application -----------------"
 	@echo "  run-app           Build frontend + run FastAPI (port 8000)"
 	@echo "  run-celery        Run Celery worker (ensures Redis is running)"
@@ -91,6 +94,18 @@ stop-redis:
 services-status:
 	@echo "Redis container status:"
 	@docker ps -a -f name=$(REDIS_CONTAINER_NAME)
+
+# ==============================================================================
+# Database
+# ==============================================================================
+.PHONY: migrate
+migrate:
+	@echo "Running migrations..."
+	@for file in $$(ls -1 migrations/*.sql | sort); do \
+		echo "Applying $$file..."; \
+		psql "$$DATABASE_URL" -f "$$file"; \
+	done
+	@echo "Migrations complete."
 
 # ==============================================================================
 # Run Application

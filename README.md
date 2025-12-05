@@ -12,14 +12,58 @@ A brutal AI-powered Norwood scale classifier. Upload a photo, get roasted about 
 ## Prerequisites
 
 - Python 3.11+
-- Node.js 18+
+- Node.js 18+ & npm
 - Docker (for Redis)
 - [uv](https://github.com/astral-sh/uv) - Python package manager
 
-### Install uv (if you don't have it)
+### Install uv
 
 ```bash
 curl -LsSf https://astral.sh/uv/install.sh | sh
+```
+
+### Install Node.js & npm
+
+See https://nodejs.org/en/download for the latest instructions.
+
+**Using fnm (recommended):**
+```bash
+curl -fsSL https://fnm.vercel.app/install | bash
+fnm install 20
+```
+
+**macOS (Homebrew):**
+```bash
+brew install node
+```
+
+Verify with `node -v` and `npm -v`.
+
+### Install Docker (Ubuntu)
+
+```bash
+# Add Docker's official GPG key:
+sudo apt-get update
+sudo apt-get install -y ca-certificates curl
+sudo install -m 0755 -d /etc/apt/keyrings
+sudo curl -fsSL https://download.docker.com/linux/ubuntu/gpg -o /etc/apt/keyrings/docker.asc
+sudo chmod a+r /etc/apt/keyrings/docker.asc
+
+# Add the repository to Apt sources:
+echo \
+  "deb [arch=$(dpkg --print-architecture) signed-by=/etc/apt/keyrings/docker.asc] https://download.docker.com/linux/ubuntu \
+  $(. /etc/os-release && echo "${UBUNTU_CODENAME:-$VERSION_CODENAME}") stable" | \
+  sudo tee /etc/apt/sources.list.d/docker.list > /dev/null
+sudo apt-get update
+
+# Install Docker Engine
+sudo apt-get install -y docker-ce docker-ce-cli containerd.io docker-buildx-plugin docker-compose-plugin
+```
+
+Optional: run docker without sudo:
+```bash
+sudo usermod -aG docker $USER
+newgrp docker  # or log out and back in
 ```
 
 ## Setup

@@ -2,7 +2,9 @@ import logging
 
 from celery import Celery
 
-from app.config import settings
+from app.config import get_settings
+
+settings = get_settings()
 
 logging.basicConfig(level=settings.LOG_LEVEL)
 logger = logging.getLogger(__name__)

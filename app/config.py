@@ -1,4 +1,4 @@
-import os
+from functools import lru_cache
 
 from pydantic_settings import BaseSettings
 
@@ -6,19 +6,39 @@ from pydantic_settings import BaseSettings
 class Settings(BaseSettings):
     """Application settings loaded from environment variables."""
 
-    ANTHROPIC_API_KEY: str = ""
-    ENVIRONMENT: str = os.getenv("ENVIRONMENT", "dev")
-    LOG_LEVEL: str = os.getenv("LOG_LEVEL", "INFO")
-    MAX_IMAGE_SIZE_MB: int = 10
-    ALLOWED_ORIGINS: list[str] = ["http://localhost:5173", "http://127.0.0.1:5173"]
+    # Core
+    ENVIRONMENT: str = "dev"
+    LOG_LEVEL: str = "INFO"
 
-    # Celery / Redis
-    CELERY_BROKER_URL: str = os.getenv("CELERY_BROKER_URL", "redis://localhost:6379/0")
-    CELERY_RESULT_BACKEND: str = os.getenv("CELERY_RESULT_BACKEND", "redis://localhost:6379/0")
+    # Database
+    DATABASE_URL: str = "postgresql://postgres:postgres@localhost:5432/norwood"
+
+    # Redis / Celery
+    CELERY_BROKER_URL: str = "redis://localhost:6379/0"
+    CELERY_RESULT_BACKEND: str = "redis://localhost:6379/0"
+
+    # Anthropic
+    ANTHROPIC_API_KEY: str = ""
+
+    # Google OAuth
+    GOOGLE_CLIENT_ID: str = ""
+    GOOGLE_CLIENT_SECRET: str = ""
+    JWT_SECRET_KEY: str = "change-me-in-production"
+    JWT_ALGORITHM: str = "HS256"
+    JWT_EXPIRE_MINUTES: int = 60 * 24 * 7  # 1 week
+
+    # App config
+    MAX_IMAGE_SIZE_MB: int = 10
+    ALLOWED_ORIGINS: list[str] = ["http://localhost:5173", "http://127.0.0.1:5173", "http://localhost:8000"]
+    FRONTEND_URL: str = "http://localhost:8000"
 
     class Config:
         env_file = ".env"
         extra = "ignore"
+
+    @property
+    def database_url(self) -> str:
+        return self.DATABASE_URL
 
     @property
     def max_image_size_bytes(self) -> int:
@@ -31,4 +51,6 @@ class Settings(BaseSettings):
         return self.ANTHROPIC_API_KEY
 
 
-settings = Settings()
+@lru_cache
+def get_settings() -> Settings:
+    return Settings()
