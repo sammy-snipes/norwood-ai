@@ -27,9 +27,17 @@ class Settings(BaseSettings):
     JWT_ALGORITHM: str = "HS256"
     JWT_EXPIRE_MINUTES: int = 60 * 24 * 7  # 1 week
 
+    # AWS S3
+    S3_BUCKET_NAME: str = ""
+    AWS_REGION: str = "us-east-1"
+
     # App config
     MAX_IMAGE_SIZE_MB: int = 10
-    ALLOWED_ORIGINS: list[str] = ["http://localhost:5173", "http://127.0.0.1:5173", "http://localhost:8000"]
+    ALLOWED_ORIGINS: list[str] = [
+        "http://localhost:5173",
+        "http://127.0.0.1:5173",
+        "http://localhost:8000",
+    ]
     FRONTEND_URL: str = "http://localhost:8000"
 
     class Config:

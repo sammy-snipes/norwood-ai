@@ -1,7 +1,6 @@
 """Google OAuth authentication router."""
 
-from datetime import datetime, timedelta, timezone
-from typing import Optional
+from datetime import UTC, datetime, timedelta
 from urllib.parse import urlencode
 
 import httpx
@@ -29,8 +28,8 @@ GOOGLE_USERINFO_URL = "https://www.googleapis.com/oauth2/v2/userinfo"
 class UserResponse(BaseModel):
     id: str
     email: str
-    name: Optional[str]
-    avatar_url: Optional[str]
+    name: str | None
+    avatar_url: str | None
     is_premium: bool
     is_admin: bool
     free_analyses_remaining: int
@@ -47,7 +46,7 @@ class TokenResponse(BaseModel):
 # JWT helpers
 def create_access_token(user_id: str) -> str:
     """Create a JWT token for the user."""
-    expire = datetime.now(timezone.utc) + timedelta(minutes=settings.JWT_EXPIRE_MINUTES)
+    expire = datetime.now(UTC) + timedelta(minutes=settings.JWT_EXPIRE_MINUTES)
     payload = {
         "sub": user_id,
         "exp": expire,
@@ -55,7 +54,7 @@ def create_access_token(user_id: str) -> str:
     return jwt.encode(payload, settings.JWT_SECRET_KEY, algorithm=settings.JWT_ALGORITHM)
 
 
-def decode_token(token: str) -> Optional[str]:
+def decode_token(token: str) -> str | None:
     """Decode JWT and return user_id, or None if invalid."""
     try:
         payload = jwt.decode(token, settings.JWT_SECRET_KEY, algorithms=[settings.JWT_ALGORITHM])
@@ -67,8 +66,8 @@ def decode_token(token: str) -> Optional[str]:
 # Dependencies
 def get_current_user(
     db: Session = Depends(get_db),
-    token: Optional[str] = None,
-) -> Optional[User]:
+    token: str | None = None,
+) -> User | None:
     """Get current user from JWT token. Returns None if not authenticated."""
     if not token:
         return None
@@ -188,7 +187,7 @@ async def google_callback(code: str, db: Session = Depends(get_db)):
 
 @router.get("/me", response_model=UserResponse)
 def get_me(
-    authorization: Optional[str] = Header(None),
+    authorization: str | None = Header(None),
     db: Session = Depends(get_db),
 ):
     """Get current authenticated user."""

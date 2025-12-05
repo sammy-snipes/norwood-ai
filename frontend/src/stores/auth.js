@@ -11,13 +11,15 @@ export const useAuthStore = defineStore('auth', () => {
 
   const isAuthenticated = computed(() => !!token.value && !!user.value)
 
-  async function fetchUser() {
+  async function fetchUser(showLoading = false) {
     if (!token.value) {
       loading.value = false
       return null
     }
 
-    loading.value = true
+    if (showLoading) {
+      loading.value = true
+    }
     try {
       const response = await fetch(`${API_URL}/api/auth/me`, {
         headers: {
@@ -70,7 +72,7 @@ export const useAuthStore = defineStore('auth', () => {
     }
 
     if (token.value) {
-      await fetchUser()
+      await fetchUser(true)  // Show loading on initial load
     } else {
       loading.value = false
     }

@@ -37,7 +37,7 @@ router.beforeEach(async (to, from, next) => {
 
   // Wait for auth to initialize if we have a token but no user yet
   if (authStore.token && !authStore.user && !authStore.loading) {
-    await authStore.fetchUser()
+    await authStore.fetchUser(true)  // Show loading on initial auth check
   }
 
   if (to.meta.requiresAuth && !authStore.isAuthenticated) {
