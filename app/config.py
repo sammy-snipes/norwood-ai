@@ -27,6 +27,14 @@ class Settings(BaseSettings):
     JWT_ALGORITHM: str = "HS256"
     JWT_EXPIRE_MINUTES: int = 60 * 24 * 7  # 1 week
 
+    # Stripe
+    STRIPE_SECRET_KEY: str = ""
+    STRIPE_PUBLISHABLE_KEY: str = ""
+    STRIPE_WEBHOOK_SECRET: str = ""
+    STRIPE_PREMIUM_PRICE_ID: str = ""
+    STRIPE_SUCCESS_URL: str = "http://localhost:8000/checkout/success"
+    STRIPE_CANCEL_URL: str = "http://localhost:8000/checkout/cancel"
+
     # AWS S3
     S3_BUCKET_NAME: str = ""
     AWS_REGION: str = "us-east-1"

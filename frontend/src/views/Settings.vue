@@ -1,10 +1,14 @@
 <script setup>
-import { computed } from 'vue'
+import { ref, computed } from 'vue'
 import { useRouter } from 'vue-router'
 import { useAuthStore } from '../stores/auth'
 
 const router = useRouter()
 const authStore = useAuthStore()
+const loading = ref(false)
+const error = ref(null)
+
+const API_URL = import.meta.env.DEV ? 'http://localhost:8000' : ''
 
 const hasUnlimited = computed(() => {
   return authStore.user?.is_admin || authStore.user?.is_premium
@@ -13,6 +17,33 @@ const hasUnlimited = computed(() => {
 const handleLogout = () => {
   authStore.logout()
   router.push('/')
+}
+
+const upgradeToPremium = async () => {
+  loading.value = true
+  error.value = null
+
+  try {
+    const response = await fetch(`${API_URL}/api/payments/create-checkout-session`, {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${authStore.token}`
+      }
+    })
+
+    if (!response.ok) {
+      const data = await response.json()
+      throw new Error(data.detail || 'Failed to create checkout session')
+    }
+
+    const data = await response.json()
+    // Open Stripe Checkout in new tab
+    window.open(data.checkout_url, '_blank')
+    loading.value = false
+  } catch (err) {
+    error.value = err.message
+    loading.value = false
+  }
 }
 </script>
 
@@ -67,7 +98,51 @@ const handleLogout = () => {
     <main class="max-w-xl mx-auto px-4 py-8">
       <h1 class="text-sm font-semibold text-gray-500 uppercase tracking-wide mb-4">Settings</h1>
 
-      <div class="space-y-4">
+      <div class="space-y-8">
+        <!-- Premium Status -->
+        <div class="p-8 bg-gray-800/50 rounded-lg border border-gray-700">
+          <div class="flex items-start justify-between">
+            <div>
+              <h2 class="text-xl font-bold mb-2">
+                <span v-if="authStore.user?.is_premium" class="text-yellow-400">✨ Premium Member</span>
+                <span v-else class="text-gray-400">Free Account</span>
+              </h2>
+
+              <p v-if="authStore.user?.is_premium" class="text-gray-400">
+                Unlimited analyses. You're living the dream.
+              </p>
+              <p v-else class="text-gray-400">
+                Free analyses remaining: <span class="font-bold text-white">{{ authStore.user?.free_analyses_remaining || 0 }}</span>
+              </p>
+            </div>
+
+            <button
+              v-if="!authStore.user?.is_premium"
+              @click="upgradeToPremium"
+              :disabled="loading"
+              class="px-6 py-3 bg-gradient-to-r from-yellow-500 to-yellow-600 hover:from-yellow-600 hover:to-yellow-700 rounded-lg font-bold transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              <span v-if="loading">Processing...</span>
+              <span v-else>Upgrade to Premium - $5</span>
+            </button>
+          </div>
+
+          <div v-if="error" class="mt-4 p-4 bg-red-900/30 border border-red-700 rounded-lg text-red-400 text-sm">
+            {{ error }}
+          </div>
+
+          <div v-if="!authStore.user?.is_premium" class="mt-6 pt-6 border-t border-gray-700">
+            <h3 class="font-bold mb-3 text-gray-300">Premium Features:</h3>
+            <ul class="space-y-2 text-gray-400">
+              <li>✓ Unlimited hair loss analyses</li>
+              <li>✓ Unlimited existential crises</li>
+              <li>✓ Unlimited savage roasts</li>
+              <li>✓ One-time payment, no subscription</li>
+            </ul>
+          </div>
+        </div>
+
+
         <!-- The Criticism -->
         <div class="p-4 bg-gray-800/50 rounded-lg">
           <h2 class="text-sm font-medium mb-3 text-red-400">A Note on Your Presence Here</h2>
