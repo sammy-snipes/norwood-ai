@@ -7,6 +7,7 @@ from app.celery_worker import celery_app
 from app.config import get_settings
 from app.db import get_db_context
 from app.models import Analysis, User
+from app.services.s3 import S3Service
 
 settings = get_settings()
 
@@ -20,6 +21,7 @@ def parse_stage_to_int(stage: str) -> int:
         return int(stage_str)
     except ValueError:
         return 0  # unknown
+
 
 NORWOOD_PROMPT = """You are a dry, philosophical observer of human vanity and the inevitability of time. You classify male pattern baldness using the Norwood scale, but more importantly, you reflect on what it means.
 
@@ -79,13 +81,11 @@ def analyze_image_task(self, image_base64: str, media_type: str, user_id: str) -
         dict with success status and analysis or error
     """
     task_id = self.request.id
-    logger.info(f"[{task_id}] Starting image analysis for user {user_id}")
 
     try:
         api_key = settings.require_anthropic_key()
         client = anthropic.Anthropic(api_key=api_key)
 
-        logger.info(f"[{task_id}] Calling Claude API...")
         message = client.messages.create(
             model="claude-sonnet-4-20250514",
             max_tokens=1024,
@@ -110,12 +110,25 @@ def analyze_image_task(self, image_base64: str, media_type: str, user_id: str) -
             ],
         )
 
-        logger.info(f"[{task_id}] Claude API call completed")
         response_text = message.content[0].text
-        logger.info(f"[{task_id}] Response: {response_text}")
 
         try:
             analysis = json.loads(response_text)
+
+            # Upload image to S3
+            image_key = None
+            if settings.S3_BUCKET_NAME:
+                try:
+                    s3 = S3Service()
+                    image_key = s3.upload_base64_image(
+                        base64_data=image_base64,
+                        user_id=user_id,
+                        content_type=media_type,
+                    )
+                    logger.info(f"[{task_id}] Uploaded image to S3")
+                except Exception as e:
+                    logger.error(f"[{task_id}] Failed to upload to S3: {e}")
+                    # Continue without image - don't fail the whole analysis
 
             # Save analysis to database
             with get_db_context() as db:
@@ -128,7 +141,7 @@ def analyze_image_task(self, image_base64: str, media_type: str, user_id: str) -
                     title=analysis.get("title", "Untitled"),
                     analysis_text=analysis.get("analysis_text", ""),
                     reasoning=analysis.get("reasoning"),
-                    image_url=None,  # Will be S3 URL in future
+                    image_url=image_key,
                 )
                 db.add(db_analysis)
 
@@ -137,10 +150,9 @@ def analyze_image_task(self, image_base64: str, media_type: str, user_id: str) -
                 if user and not user.is_admin and not user.is_premium:
                     if user.free_analyses_remaining > 0:
                         user.free_analyses_remaining -= 1
-                        logger.info(f"[{task_id}] Decremented free analyses for user {user_id}, remaining: {user.free_analyses_remaining}")
 
                 db.commit()
-                logger.info(f"[{task_id}] Saved analysis {db_analysis.id} to database")
+                logger.info(f"[{task_id}] Analysis saved, stage: {analysis.get('stage')}")
 
             return {"success": True, "analysis": analysis}
         except json.JSONDecodeError as e:

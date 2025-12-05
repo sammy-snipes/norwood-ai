@@ -1,5 +1,4 @@
 from datetime import datetime
-from typing import Optional
 
 from pydantic import AliasChoices, BaseModel, Field
 
@@ -76,8 +75,8 @@ class AnalysisHistoryItem(BaseModel):
     confidence: str = Field(..., description="Confidence level")
     title: str = Field(..., description="Short title")
     analysis_text: str = Field(..., description="The analysis text")
-    reasoning: Optional[str] = Field(None, description="Analysis reasoning")
-    image_url: Optional[str] = Field(None, description="S3 URL of the image")
+    reasoning: str | None = Field(None, description="Analysis reasoning")
+    image_url: str | None = Field(None, description="S3 URL of the image")
     created_at: datetime = Field(..., description="When the analysis was created")
 
     model_config = {"from_attributes": True}

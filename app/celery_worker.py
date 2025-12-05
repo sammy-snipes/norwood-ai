@@ -25,4 +25,4 @@ celery_app.conf.update(
     result_expires=3600,  # Results expire after 1 hour
 )
 
-logger.info(f"Celery configured with broker: {settings.CELERY_BROKER_URL}")
+logger.info("Celery worker configured")

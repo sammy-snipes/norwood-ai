@@ -18,6 +18,11 @@ help:
 	@echo "  install           Install Python and frontend dependencies"
 	@echo "  setup-services    Pull Redis image and create container (run once)"
 	@echo ""
+	@echo "---------------- Code Quality -----------------"
+	@echo "  format            Format code with black and ruff"
+	@echo "  lint              Check code with ruff"
+	@echo "  check             Run format check + lint (no changes)"
+	@echo ""
 	@echo "---------------- Build -----------------"
 	@echo "  build-frontend    Build Vue frontend for production"
 	@echo ""
@@ -45,6 +50,29 @@ install:
 	@echo "Installing frontend dependencies..."
 	cd frontend && npm install
 	@echo "Installation complete."
+
+# ==============================================================================
+# Code Quality
+# ==============================================================================
+.PHONY: format
+format:
+	@echo "Formatting code with black and ruff..."
+	uv run black app tests
+	uv run ruff check --fix app tests
+	@echo "Formatting complete."
+
+.PHONY: lint
+lint:
+	@echo "Linting code with ruff..."
+	uv run ruff check app tests
+	@echo "Lint complete."
+
+.PHONY: check
+check:
+	@echo "Checking code formatting and linting..."
+	uv run black --check app tests
+	uv run ruff check app tests
+	@echo "All checks passed."
 
 # ==============================================================================
 # Build

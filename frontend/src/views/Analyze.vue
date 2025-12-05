@@ -25,6 +25,18 @@ const selectedHistoryId = ref(null)
 const analysisHistory = ref([])
 const historyLoading = ref(false)
 
+// Toast for delete message
+const toast = ref(null)
+const deletionQuotes = [
+  "Ah, the digital eraser—as if forgetting changes what was seen.",
+  "Deleting the evidence doesn't delete the follicles. Or their absence.",
+  "We understand. Acceptance is merely the final stage, not the first.",
+  "The mirror remembers what the database forgets.",
+  "To delete is human. To accept is divine. You chose human.",
+  "Somewhere, a philosopher weeps. Not for your hair—for your denial.",
+  "The Norwood scale is patient. It will wait for your return.",
+]
+
 // Computed: user has unlimited analyses (admin or premium)
 const hasUnlimited = computed(() => {
   return authStore.user?.is_admin || authStore.user?.is_premium
@@ -34,6 +46,16 @@ const hasUnlimited = computed(() => {
 const canAnalyze = computed(() => {
   return hasUnlimited.value || (authStore.user?.free_analyses_remaining > 0)
 })
+
+// Preload images into browser cache
+const preloadImages = (analyses) => {
+  analyses.forEach(item => {
+    if (item.image_url) {
+      const img = new Image()
+      img.src = item.image_url
+    }
+  })
+}
 
 // Fetch analysis history
 const fetchHistory = async () => {
@@ -48,6 +70,8 @@ const fetchHistory = async () => {
     })
     if (response.ok) {
       analysisHistory.value = await response.json()
+      // Preload all images in background
+      preloadImages(analysisHistory.value)
     }
   } catch (err) {
     console.error('Failed to fetch history:', err)
@@ -65,7 +89,8 @@ const viewAnalysis = (item) => {
     title: item.title,
     analysis_text: item.analysis_text,
     reasoning: item.reasoning,
-    description: `Stage ${item.norwood_stage}`
+    description: `Stage ${item.norwood_stage}`,
+    image_url: item.image_url
   }
   // Clear upload state when viewing history
   selectedFile.value = null
@@ -105,12 +130,10 @@ const pollForResult = async (taskId) => {
     try {
       const response = await fetch(`${API_URL}/tasks/${taskId}`)
       const data = await response.json()
-      console.log('Poll response:', data)
 
       taskStatus.value = data.status
 
       if (data.ready) {
-        console.log('Task ready, result:', data.result)
         if (data.result?.success && data.result?.analysis) {
           return { success: true, analysis: data.result.analysis }
         } else {
@@ -157,33 +180,31 @@ const analyze = async () => {
 
     taskStatus.value = 'processing'
     const pollResult = await pollForResult(data.task_id)
-    console.log('pollResult:', JSON.stringify(pollResult, null, 2))
 
     if (pollResult.success && pollResult.analysis) {
-      console.log('Setting result...')
-      // Set result with explicit structure and fallbacks
-      const analysis = pollResult.analysis
+      const a = pollResult.analysis
+      // Set result FIRST before clearing anything
       result.value = {
-        stage: analysis.stage || 'unknown',
-        confidence: analysis.confidence || 'low',
-        title: analysis.title || 'Analysis Complete',
-        description: analysis.description || '',
-        reasoning: analysis.reasoning || '',
-        analysis_text: analysis.analysis_text || analysis.reflection || analysis.roast || ''
+        stage: a.stage,
+        confidence: a.confidence,
+        title: a.title,
+        description: a.description,
+        reasoning: a.reasoning,
+        analysis_text: a.analysis_text
       }
-      console.log('Result set:', result.value)
-      // Clear the preview since we have results now
+
+      // Now safe to clear upload state
       selectedFile.value = null
       previewUrl.value = null
-      console.log('Preview cleared, previewUrl:', previewUrl.value, 'result:', !!result.value)
-      // Refresh history and select the new analysis
-      await fetchHistory()
-      if (analysisHistory.value.length > 0) {
-        selectedHistoryId.value = analysisHistory.value[0].id
-      }
+
+      // Update sidebar and load full analysis with image from DB
+      fetchHistory().then(() => {
+        if (analysisHistory.value.length > 0) {
+          viewAnalysis(analysisHistory.value[0])
+        }
+      })
       authStore.fetchUser()
     } else {
-      console.log('Poll failed:', pollResult)
       error.value = pollResult.error || 'Analysis failed'
     }
   } catch (err) {
@@ -203,11 +224,45 @@ const reset = () => {
   selectedHistoryId.value = null
 }
 
+const deleteAnalysis = async (id) => {
+  try {
+    const response = await fetch(`${API_URL}/api/analyses/${id}`, {
+      method: 'DELETE',
+      headers: {
+        'Authorization': `Bearer ${authStore.token}`
+      }
+    })
+
+    if (response.ok) {
+      // Show philosophical toast
+      toast.value = deletionQuotes[Math.floor(Math.random() * deletionQuotes.length)]
+      setTimeout(() => { toast.value = null }, 3000)
+
+      // Clear result if we deleted the current one
+      if (selectedHistoryId.value === id) {
+        result.value = null
+        selectedHistoryId.value = null
+      }
+
+      // Refresh history
+      await fetchHistory()
+    }
+  } catch (err) {
+    console.error('Failed to delete:', err)
+  }
+}
+
 const getStageColor = (stage) => {
   const stageNum = parseInt(stage)
+  if (stageNum === 0) return 'text-red-400'  // unknown
   if (stageNum <= 2) return 'text-green-400'
   if (stageNum <= 4) return 'text-yellow-400'
   return 'text-red-400'
+}
+
+const formatStage = (stage) => {
+  const stageNum = parseInt(stage)
+  return stageNum === 0 ? '?' : stageNum
 }
 
 const formatDate = (dateStr) => {
@@ -298,15 +353,21 @@ const formatDate = (dateStr) => {
             :key="item.id"
             @click="viewAnalysis(item)"
             :class="[
-              'px-2 py-1.5 rounded transition-colors cursor-pointer flex items-center gap-2',
+              'group px-2 py-1.5 rounded transition-colors cursor-pointer flex items-center gap-2',
               selectedHistoryId === item.id
                 ? 'bg-gray-700'
                 : 'hover:bg-gray-800/50'
             ]"
           >
-            <span :class="['text-sm font-bold w-4', getStageColor(item.norwood_stage)]">{{ item.norwood_stage }}</span>
+            <span :class="['text-sm font-bold w-4', getStageColor(item.norwood_stage)]">{{ formatStage(item.norwood_stage) }}</span>
             <span class="text-xs text-gray-400 truncate flex-1">{{ item.title }}</span>
-            <span class="text-xs text-gray-600 whitespace-nowrap">{{ formatDate(item.created_at) }}</span>
+            <span class="text-xs text-gray-600 whitespace-nowrap group-hover:hidden">{{ formatDate(item.created_at) }}</span>
+            <button
+              @click.stop="deleteAnalysis(item.id)"
+              class="hidden group-hover:block text-xs text-gray-600 hover:text-red-400 transition-colors"
+            >
+              ✕
+            </button>
           </div>
         </div>
       </aside>
@@ -378,10 +439,19 @@ const formatDate = (dateStr) => {
         </div>
 
         <!-- Results -->
-        <div v-if="result" class="mt-4 space-y-2">
+        <div v-if="result" class="mt-4 space-y-3">
+          <!-- Image (if available) -->
+          <div v-if="result.image_url" class="rounded-lg overflow-hidden bg-gray-800">
+            <img
+              :src="result.image_url"
+              alt="Analysis image"
+              class="w-full max-h-64 object-contain"
+            />
+          </div>
+
           <!-- Stage + Title -->
           <div class="flex items-center gap-3 p-3 bg-gray-800/50 rounded-lg">
-            <span :class="['text-3xl font-black', getStageColor(result.stage)]">{{ result.stage }}</span>
+            <span :class="['text-3xl font-black', getStageColor(result.stage)]">{{ formatStage(result.stage) }}</span>
             <span class="text-gray-400 text-sm italic">{{ result.title }}</span>
           </div>
 
@@ -399,9 +469,33 @@ const formatDate = (dateStr) => {
               <span>{{ result.reasoning }}</span>
             </div>
           </details>
+
         </div>
         </div>
       </main>
     </div>
+
+    <!-- Philosophical toast -->
+    <Teleport to="body">
+      <Transition name="fade">
+        <div
+          v-if="toast"
+          class="fixed bottom-6 left-6 max-w-md px-4 py-3 bg-gray-800 border border-gray-700 rounded-lg shadow-lg z-50"
+        >
+          <p class="text-sm text-gray-300 italic">{{ toast }}</p>
+        </div>
+      </Transition>
+    </Teleport>
   </div>
 </template>
+
+<style scoped>
+.fade-enter-active,
+.fade-leave-active {
+  transition: opacity 0.3s ease;
+}
+.fade-enter-from,
+.fade-leave-to {
+  opacity: 0;
+}
+</style>
