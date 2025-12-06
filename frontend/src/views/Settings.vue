@@ -10,7 +10,8 @@ const authStore = useAuthStore()
     <AppHeader />
 
     <!-- Main Content -->
-    <main class="max-w-xl mx-auto px-4 py-8">
+    <main class="h-[calc(100vh-41px)] overflow-y-auto">
+      <div class="max-w-xl mx-auto px-4 py-8">
       <h1 class="text-sm font-semibold text-gray-500 uppercase tracking-wide mb-4">Settings</h1>
 
       <div class="space-y-4">
@@ -79,6 +80,7 @@ const authStore = useAuthStore()
             Return to What Matters
           </router-link>
         </div>
+      </div>
       </div>
     </main>
   </div>
