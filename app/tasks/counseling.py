@@ -47,9 +47,7 @@ def get_analysis_history(user_id: str, db) -> str:
     history_lines = []
     for a in analyses:
         date_str = a.created_at.strftime("%Y-%m-%d")
-        history_lines.append(
-            f"- {date_str}: Norwood {a.norwood_stage} ({a.confidence} confidence)"
-        )
+        history_lines.append(f"- {date_str}: Norwood {a.norwood_stage} ({a.confidence} confidence)")
         if a.analysis_text:
             history_lines.append(f"  {a.analysis_text}")
 
@@ -79,9 +77,9 @@ def generate_counseling_response_task(
 
     with get_db_context() as db:
         # Get the assistant message
-        assistant_msg = db.query(CounselingMessage).filter(
-            CounselingMessage.id == message_id
-        ).first()
+        assistant_msg = (
+            db.query(CounselingMessage).filter(CounselingMessage.id == message_id).first()
+        )
 
         if not assistant_msg:
             logger.error(f"[{task_id}] Message {message_id} not found")
@@ -92,9 +90,7 @@ def generate_counseling_response_task(
         db.commit()
 
         # Get session with all messages
-        session = db.query(CounselingSession).filter(
-            CounselingSession.id == session_id
-        ).first()
+        session = db.query(CounselingSession).filter(CounselingSession.id == session_id).first()
 
         if not session:
             assistant_msg.status = MessageStatus.failed
@@ -130,8 +126,7 @@ def generate_counseling_response_task(
             # Auto-generate title from first user message if not set
             if not session.title:
                 first_user_msg = next(
-                    (m for m in session.messages if m.role == "user" and m.content),
-                    None
+                    (m for m in session.messages if m.role == "user" and m.content), None
                 )
                 if first_user_msg:
                     words = first_user_msg.content.split()[:5]
