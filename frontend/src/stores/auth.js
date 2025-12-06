@@ -1,5 +1,7 @@
 import { defineStore } from 'pinia'
 import { ref, computed } from 'vue'
+import { useTaskStore } from './tasks'
+import { useCounselingStore } from './counseling'
 
 const API_URL = import.meta.env.DEV ? 'http://localhost:8000' : ''
 
@@ -52,6 +54,11 @@ export const useAuthStore = defineStore('auth', () => {
     token.value = null
     user.value = null
     localStorage.removeItem('token')
+    // Clean up any pending task polling
+    const taskStore = useTaskStore()
+    taskStore.cleanup()
+    const counselingStore = useCounselingStore()
+    counselingStore.cleanup()
   }
 
   function loginWithGoogle() {

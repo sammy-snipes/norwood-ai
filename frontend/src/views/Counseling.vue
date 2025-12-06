@@ -1,6 +1,7 @@
 <script setup>
-import { ref, computed, onMounted, onUnmounted, nextTick } from 'vue'
+import { ref, computed, onMounted, nextTick } from 'vue'
 import { useAuthStore } from '../stores/auth'
+import { useCounselingStore } from '../stores/counseling'
 import AppHeader from '../components/AppHeader.vue'
 import HistorySidebar from '../components/HistorySidebar.vue'
 import { marked } from 'marked'
@@ -12,6 +13,7 @@ marked.setOptions({
 })
 
 const authStore = useAuthStore()
+const counselingStore = useCounselingStore()
 
 const renderMarkdown = (content) => {
   return marked.parse(content || '')
@@ -26,20 +28,11 @@ const newMessage = ref('')
 const loading = ref(false)
 const messagesContainer = ref(null)
 
-// Track pending messages we're polling for (keyed by message ID -> session ID)
-const pendingMessages = ref({})
-let pollInterval = null
-
 const isPremium = computed(() => authStore.user?.is_premium || authStore.user?.is_admin)
 
 // Check if the current active session has any pending messages
 const sending = computed(() => {
-  for (const [msgId, sessionId] of Object.entries(pendingMessages.value)) {
-    if (sessionId === activeSession.value) {
-      return true
-    }
-  }
-  return false
+  return counselingStore.hasPendingMessages(activeSession.value)
 })
 
 const fetchSessions = async () => {
@@ -71,8 +64,29 @@ const createSession = async () => {
   }
 }
 
+const handleMessageComplete = async ({ messageId, sessionId, status, content }) => {
+  // Only update UI if still on the same session
+  if (activeSession.value !== sessionId) return
+
+  const msgIndex = messages.value.findIndex(m => m.id === messageId)
+  if (msgIndex !== -1) {
+    messages.value[msgIndex] = {
+      ...messages.value[msgIndex],
+      status,
+      content
+    }
+  }
+
+  // Refresh sessions to update title
+  await fetchSessions()
+
+  await nextTick()
+  scrollToBottom()
+}
+
 const selectSession = async (sessionId) => {
   activeSession.value = sessionId
+  counselingStore.lastActiveSessionId = sessionId
   loading.value = true
   try {
     const res = await fetch(`${API_URL}/api/counseling/sessions/${sessionId}`, {
@@ -82,13 +96,18 @@ const selectSession = async (sessionId) => {
       const data = await res.json()
       messages.value = data.messages
 
-      // Check for any pending/processing messages and start polling
+      // Check for any pending/processing messages and register them with the store
       for (const msg of data.messages) {
         if (msg.status === 'pending' || msg.status === 'processing') {
-          pendingMessages.value[msg.id] = sessionId
+          // Only add if not already tracked
+          if (!counselingStore.pendingMessages[msg.id]) {
+            counselingStore.addPendingMessage(msg.id, sessionId, handleMessageComplete)
+          }
         }
       }
-      startPollingIfNeeded()
+
+      // Update callbacks for any existing pending messages in this session
+      counselingStore.updateCallbacks(sessionId, handleMessageComplete)
 
       await nextTick()
       scrollToBottom()
@@ -97,70 +116,6 @@ const selectSession = async (sessionId) => {
     console.error('Failed to fetch session:', err)
   } finally {
     loading.value = false
-  }
-}
-
-const pollMessageStatus = async (messageId, sessionId) => {
-  // Only poll if this message is for the active session
-  if (activeSession.value !== sessionId) {
-    delete pendingMessages.value[messageId]
-    return
-  }
-
-  try {
-    const res = await fetch(`${API_URL}/api/counseling/messages/${messageId}/status`, {
-      headers: { 'Authorization': `Bearer ${authStore.token}` }
-    })
-    if (res.ok) {
-      const data = await res.json()
-
-      if (data.status === 'completed' || data.status === 'failed') {
-        // Update the message in our list
-        const msgIndex = messages.value.findIndex(m => m.id === messageId)
-        if (msgIndex !== -1) {
-          messages.value[msgIndex] = {
-            ...messages.value[msgIndex],
-            status: data.status,
-            content: data.content
-          }
-        }
-
-        // Remove from pending
-        delete pendingMessages.value[messageId]
-
-        // Refresh sessions to update title
-        await fetchSessions()
-
-        await nextTick()
-        scrollToBottom()
-      }
-    }
-  } catch (err) {
-    console.error('Failed to poll message status:', err)
-  }
-}
-
-const startPollingIfNeeded = () => {
-  if (pollInterval) return
-  if (Object.keys(pendingMessages.value).length === 0) return
-
-  pollInterval = setInterval(() => {
-    const pending = { ...pendingMessages.value }
-    if (Object.keys(pending).length === 0) {
-      stopPolling()
-      return
-    }
-
-    for (const [messageId, sessionId] of Object.entries(pending)) {
-      pollMessageStatus(messageId, sessionId)
-    }
-  }, 1000)
-}
-
-const stopPolling = () => {
-  if (pollInterval) {
-    clearInterval(pollInterval)
-    pollInterval = null
   }
 }
 
@@ -189,10 +144,13 @@ const sendMessage = async () => {
         messages.value.push(data.assistant_message)
       }
 
-      // Track the pending assistant message
+      // Track the pending assistant message in the global store
       if (data.assistant_message.status === 'pending' || data.assistant_message.status === 'processing') {
-        pendingMessages.value[data.assistant_message.id] = sessionId
-        startPollingIfNeeded()
+        counselingStore.addPendingMessage(
+          data.assistant_message.id,
+          sessionId,
+          handleMessageComplete
+        )
       }
 
       await nextTick()
@@ -213,11 +171,10 @@ const deleteSession = async (sessionId) => {
     if (activeSession.value === sessionId) {
       activeSession.value = null
       messages.value = []
-      // Clear any pending messages for this session
-      for (const [msgId, sessId] of Object.entries(pendingMessages.value)) {
-        if (sessId === sessionId) {
-          delete pendingMessages.value[msgId]
-        }
+      // Clear any pending messages for this session from the store
+      const pending = counselingStore.getPendingForSession(sessionId)
+      for (const msg of pending) {
+        counselingStore.removePendingMessage(msg.id)
       }
     }
   } catch (err) {
@@ -236,14 +193,19 @@ const formatDate = (dateStr) => {
   return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })
 }
 
-onMounted(() => {
+onMounted(async () => {
   if (isPremium.value) {
-    fetchSessions()
-  }
-})
+    await fetchSessions()
 
-onUnmounted(() => {
-  stopPolling()
+    // Restore last active session if we had one
+    if (counselingStore.lastActiveSessionId) {
+      // Verify the session still exists
+      const sessionExists = sessions.value.some(s => s.id === counselingStore.lastActiveSessionId)
+      if (sessionExists) {
+        await selectSession(counselingStore.lastActiveSessionId)
+      }
+    }
+  }
 })
 </script>
 

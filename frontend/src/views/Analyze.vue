@@ -1,12 +1,14 @@
 <script setup>
 import { ref, computed, onMounted } from 'vue'
 import { useAuthStore } from '../stores/auth'
+import { useTaskStore } from '../stores/tasks'
 import AppHeader from '../components/AppHeader.vue'
 import HistorySidebar from '../components/HistorySidebar.vue'
 import DonatePopup from '../components/DonatePopup.vue'
 import DonateCaptcha from '../components/DonateCaptcha.vue'
 
 const authStore = useAuthStore()
+const taskStore = useTaskStore()
 
 const API_URL = import.meta.env.DEV ? 'http://localhost:8000' : ''
 
@@ -136,6 +138,14 @@ const viewAnalysis = (item) => {
 onMounted(() => {
   fetchHistory()
   initCaptchaTimer()
+
+  // Restore loading state if we have pending analysis tasks
+  if (taskStore.hasPendingTasks('analyze')) {
+    isLoading.value = true
+    taskStatus.value = 'processing'
+    // Update callback to use current component's handler
+    taskStore.updateCallback('analyze', handleAnalysisComplete)
+  }
 })
 
 const onFileSelect = (event) => {
@@ -158,34 +168,34 @@ const onDrop = (event) => {
   }
 }
 
-const pollForResult = async (taskId) => {
-  const maxAttempts = 60
-  let attempts = 0
+const handleAnalysisComplete = async ({ success, result: taskResult }) => {
+  isLoading.value = false
+  taskStatus.value = null
 
-  while (attempts < maxAttempts) {
-    try {
-      const response = await fetch(`${API_URL}/tasks/${taskId}`)
-      const data = await response.json()
-
-      taskStatus.value = data.status
-
-      if (data.ready) {
-        if (data.result?.success && data.result?.analysis) {
-          return { success: true, analysis: data.result.analysis }
-        } else {
-          return { success: false, error: data.error || data.result?.error || 'Analysis failed' }
-        }
-      }
-
-      await new Promise(resolve => setTimeout(resolve, 1000))
-      attempts++
-    } catch (err) {
-      console.error('Poll error:', err)
-      return { success: false, error: 'Failed to check task status' }
+  if (success && taskResult?.analysis) {
+    const a = taskResult.analysis
+    result.value = {
+      stage: a.stage,
+      confidence: a.confidence,
+      title: a.title,
+      description: a.description,
+      reasoning: a.reasoning,
+      analysis_text: a.analysis_text
     }
-  }
 
-  return { success: false, error: 'Analysis timed out' }
+    // Clear upload state
+    selectedFile.value = null
+    previewUrl.value = null
+
+    // Update sidebar and load full analysis with image from DB
+    await fetchHistory()
+    if (analysisHistory.value.length > 0) {
+      viewAnalysis(analysisHistory.value[0])
+    }
+    authStore.fetchUser()
+  } else {
+    error.value = taskResult?.error || 'Analysis failed'
+  }
 }
 
 const analyze = async () => {
@@ -215,38 +225,11 @@ const analyze = async () => {
     }
 
     taskStatus.value = 'processing'
-    const pollResult = await pollForResult(data.task_id)
-
-    if (pollResult.success && pollResult.analysis) {
-      const a = pollResult.analysis
-      // Set result FIRST before clearing anything
-      result.value = {
-        stage: a.stage,
-        confidence: a.confidence,
-        title: a.title,
-        description: a.description,
-        reasoning: a.reasoning,
-        analysis_text: a.analysis_text
-      }
-
-      // Now safe to clear upload state
-      selectedFile.value = null
-      previewUrl.value = null
-
-      // Update sidebar and load full analysis with image from DB
-      fetchHistory().then(() => {
-        if (analysisHistory.value.length > 0) {
-          viewAnalysis(analysisHistory.value[0])
-        }
-      })
-      authStore.fetchUser()
-    } else {
-      error.value = pollResult.error || 'Analysis failed'
-    }
+    // Register task with global store (context: 'analyze')
+    taskStore.addTask(data.task_id, 'analyze', handleAnalysisComplete)
   } catch (err) {
     console.error('Analysis error:', err)
     error.value = err.message || 'Failed to connect to server'
-  } finally {
     isLoading.value = false
     taskStatus.value = null
   }
@@ -339,9 +322,15 @@ const formatDate = (dateStr) => {
       <!-- Main Content -->
       <main class="flex-1 p-6 h-[calc(100vh-41px)] overflow-y-auto">
         <div class="max-w-xl mx-auto">
+        <!-- Loading State (when returning to page with pending task) -->
+        <div v-if="isLoading && !previewUrl" class="text-center py-12">
+          <div class="w-12 h-12 border-2 border-purple-600 border-t-transparent rounded-full animate-spin mx-auto mb-4"></div>
+          <p class="text-gray-400 text-sm">Analyzing...</p>
+        </div>
+
         <!-- Upload Area -->
         <div
-          v-if="!previewUrl && !result"
+          v-else-if="!previewUrl && !result"
           @drop.prevent="onDrop"
           @dragover.prevent
           class="border border-dashed border-gray-700 rounded-lg p-8 text-center hover:border-gray-600 transition-colors cursor-pointer"
