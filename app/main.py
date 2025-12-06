@@ -19,6 +19,9 @@ from app.routers.payments import router as payments_router
 from app.schemas import (
     AnalysisHistoryItem,
     AnalyzeResponse,
+    CertificationTaskResponse,
+    CounselingMessageResult,
+    CounselingTaskResponse,
     HealthResponse,
     TaskResponse,
     TaskStatusResponse,
@@ -194,15 +197,30 @@ def get_task_status(
             result = task_result.result
             if result.get("success"):
                 response.status = "completed"
-                # Only include AnalyzeResponse if this is an analysis task
+                # Include result based on task type
                 if "analysis" in result:
                     response.result = AnalyzeResponse(
                         success=True,
                         analysis=result["analysis"],
                     )
+                elif "message" in result:
+                    # Counseling task
+                    response.result = CounselingTaskResponse(
+                        success=True,
+                        message=CounselingMessageResult(**result["message"]),
+                    )
+                else:
+                    # Certification task (photo validation, diagnosis)
+                    response.result = CertificationTaskResponse(success=True)
             else:
                 response.status = "failed"
                 response.error = result.get("error", "Unknown error")
+                # Still include message data for counseling failures so UI can update
+                if "message" in result:
+                    response.result = CounselingTaskResponse(
+                        success=False,
+                        message=CounselingMessageResult(**result["message"]),
+                    )
         else:
             response.status = "failed"
             response.error = str(task_result.info)

@@ -1,6 +1,7 @@
 <script setup>
-import { ref, computed, onMounted, onUnmounted, nextTick } from 'vue'
+import { ref, computed, onMounted, nextTick } from 'vue'
 import { useAuthStore } from '../stores/auth'
+import { useTaskStore } from '../stores/tasks'
 import AppHeader from '../components/AppHeader.vue'
 import HistorySidebar from '../components/HistorySidebar.vue'
 import { marked } from 'marked'
@@ -12,6 +13,7 @@ marked.setOptions({
 })
 
 const authStore = useAuthStore()
+const taskStore = useTaskStore()
 
 const renderMarkdown = (content) => {
   return marked.parse(content || '')
@@ -26,20 +28,12 @@ const newMessage = ref('')
 const loading = ref(false)
 const messagesContainer = ref(null)
 
-// Track pending messages we're polling for (keyed by message ID -> session ID)
-const pendingMessages = ref({})
-let pollInterval = null
-
 const isPremium = computed(() => authStore.user?.is_premium || authStore.user?.is_admin)
 
 // Check if the current active session has any pending messages
 const sending = computed(() => {
-  for (const [msgId, sessionId] of Object.entries(pendingMessages.value)) {
-    if (sessionId === activeSession.value) {
-      return true
-    }
-  }
-  return false
+  const tasks = taskStore.getTasksForContext('counseling')
+  return tasks.some(t => t.metadata.sessionId === activeSession.value)
 })
 
 const fetchSessions = async () => {
@@ -71,8 +65,33 @@ const createSession = async () => {
   }
 }
 
+const handleMessageComplete = async ({ success, result }) => {
+  if (!result?.message) return
+
+  const { id: messageId, session_id: sessionId, content, status } = result.message
+
+  // Only update UI if still on the same session
+  if (activeSession.value !== sessionId) return
+
+  const msgIndex = messages.value.findIndex(m => m.id === messageId)
+  if (msgIndex !== -1) {
+    messages.value[msgIndex] = {
+      ...messages.value[msgIndex],
+      status,
+      content
+    }
+  }
+
+  // Refresh sessions to update title
+  await fetchSessions()
+
+  await nextTick()
+  scrollToBottom()
+}
+
 const selectSession = async (sessionId) => {
   activeSession.value = sessionId
+  taskStore.setLastActive('counseling', sessionId)
   loading.value = true
   try {
     const res = await fetch(`${API_URL}/api/counseling/sessions/${sessionId}`, {
@@ -82,13 +101,8 @@ const selectSession = async (sessionId) => {
       const data = await res.json()
       messages.value = data.messages
 
-      // Check for any pending/processing messages and start polling
-      for (const msg of data.messages) {
-        if (msg.status === 'pending' || msg.status === 'processing') {
-          pendingMessages.value[msg.id] = sessionId
-        }
-      }
-      startPollingIfNeeded()
+      // Update callbacks for any existing pending tasks in this session
+      taskStore.updateCallback('counseling', handleMessageComplete)
 
       await nextTick()
       scrollToBottom()
@@ -97,70 +111,6 @@ const selectSession = async (sessionId) => {
     console.error('Failed to fetch session:', err)
   } finally {
     loading.value = false
-  }
-}
-
-const pollMessageStatus = async (messageId, sessionId) => {
-  // Only poll if this message is for the active session
-  if (activeSession.value !== sessionId) {
-    delete pendingMessages.value[messageId]
-    return
-  }
-
-  try {
-    const res = await fetch(`${API_URL}/api/counseling/messages/${messageId}/status`, {
-      headers: { 'Authorization': `Bearer ${authStore.token}` }
-    })
-    if (res.ok) {
-      const data = await res.json()
-
-      if (data.status === 'completed' || data.status === 'failed') {
-        // Update the message in our list
-        const msgIndex = messages.value.findIndex(m => m.id === messageId)
-        if (msgIndex !== -1) {
-          messages.value[msgIndex] = {
-            ...messages.value[msgIndex],
-            status: data.status,
-            content: data.content
-          }
-        }
-
-        // Remove from pending
-        delete pendingMessages.value[messageId]
-
-        // Refresh sessions to update title
-        await fetchSessions()
-
-        await nextTick()
-        scrollToBottom()
-      }
-    }
-  } catch (err) {
-    console.error('Failed to poll message status:', err)
-  }
-}
-
-const startPollingIfNeeded = () => {
-  if (pollInterval) return
-  if (Object.keys(pendingMessages.value).length === 0) return
-
-  pollInterval = setInterval(() => {
-    const pending = { ...pendingMessages.value }
-    if (Object.keys(pending).length === 0) {
-      stopPolling()
-      return
-    }
-
-    for (const [messageId, sessionId] of Object.entries(pending)) {
-      pollMessageStatus(messageId, sessionId)
-    }
-  }, 1000)
-}
-
-const stopPolling = () => {
-  if (pollInterval) {
-    clearInterval(pollInterval)
-    pollInterval = null
   }
 }
 
@@ -189,10 +139,14 @@ const sendMessage = async () => {
         messages.value.push(data.assistant_message)
       }
 
-      // Track the pending assistant message
-      if (data.assistant_message.status === 'pending' || data.assistant_message.status === 'processing') {
-        pendingMessages.value[data.assistant_message.id] = sessionId
-        startPollingIfNeeded()
+      // Track the pending task with metadata
+      if (data.task_id) {
+        taskStore.addTask(
+          data.task_id,
+          'counseling',
+          { messageId: data.assistant_message.id, sessionId },
+          handleMessageComplete
+        )
       }
 
       await nextTick()
@@ -213,12 +167,6 @@ const deleteSession = async (sessionId) => {
     if (activeSession.value === sessionId) {
       activeSession.value = null
       messages.value = []
-      // Clear any pending messages for this session
-      for (const [msgId, sessId] of Object.entries(pendingMessages.value)) {
-        if (sessId === sessionId) {
-          delete pendingMessages.value[msgId]
-        }
-      }
     }
   } catch (err) {
     console.error('Failed to delete session:', err)
@@ -236,14 +184,19 @@ const formatDate = (dateStr) => {
   return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })
 }
 
-onMounted(() => {
+onMounted(async () => {
   if (isPremium.value) {
-    fetchSessions()
-  }
-})
+    await fetchSessions()
 
-onUnmounted(() => {
-  stopPolling()
+    // Restore last active session if we had one
+    const lastSessionId = taskStore.getLastActive('counseling')
+    if (lastSessionId) {
+      const sessionExists = sessions.value.some(s => s.id === lastSessionId)
+      if (sessionExists) {
+        await selectSession(lastSessionId)
+      }
+    }
+  }
 })
 </script>
 

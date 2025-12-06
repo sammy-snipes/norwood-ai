@@ -29,4 +29,7 @@ celery_app.conf.update(
     result_expires=3600,  # Results expire after 1 hour
 )
 
+# Reduce verbosity of task success logs (don't print full return value)
+logging.getLogger("celery.app.trace").setLevel(logging.WARNING)
+
 logger.info("Celery worker configured")

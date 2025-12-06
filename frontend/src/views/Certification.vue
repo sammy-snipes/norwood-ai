@@ -1,10 +1,12 @@
 <script setup>
-import { ref, computed, onMounted, onUnmounted } from 'vue'
+import { ref, computed, onMounted } from 'vue'
 import { useAuthStore } from '../stores/auth'
+import { useTaskStore } from '../stores/tasks'
 import AppHeader from '../components/AppHeader.vue'
 import HistorySidebar from '../components/HistorySidebar.vue'
 
 const authStore = useAuthStore()
+const taskStore = useTaskStore()
 const API_URL = import.meta.env.DEV ? 'http://localhost:8000' : ''
 
 // State
@@ -29,8 +31,6 @@ const selectedHistoryId = ref(null)
 
 // File input ref for manual reset
 const fileInputRef = ref(null)
-
-let pollInterval = null
 
 const isPremium = computed(() => authStore.user?.is_premium || authStore.user?.is_admin)
 
@@ -107,7 +107,7 @@ const fetchCertificationStatus = async () => {
         step.value = 4
       } else if (data.status === 'analyzing') {
         step.value = 4
-        startPolling()
+        // Task is already being polled by task store if we started it
       } else {
         // Find first unapproved photo type
         for (let i = 0; i < photoTypes.length; i++) {
@@ -168,8 +168,12 @@ const uploadPhoto = async () => {
 
     if (res.ok) {
       const data = await res.json()
-      // Start polling for validation result (pass current photo type)
-      pollPhotoValidation(data.photo_id, data.task_id, currentPhotoType.value)
+      // Register task with global store (context: 'cert-photo')
+      const photoType = currentPhotoType.value
+      const currentStepVal = step.value
+      taskStore.addTask(data.task_id, 'cert-photo', { photoType, step: currentStepVal }, async () => {
+        await handlePhotoValidationComplete(photoType, currentStepVal)
+      })
     } else {
       const data = await res.json()
       error.value = data.detail || 'Failed to upload photo'
@@ -184,56 +188,35 @@ const uploadPhoto = async () => {
   }
 }
 
-const pollPhotoValidation = async (photoId, taskId, photoType) => {
-  const poll = async () => {
-    try {
-      const res = await fetch(`${API_URL}/tasks/${taskId}`, {
-        headers: { 'Authorization': `Bearer ${authStore.token}` }
-      })
-      if (res.ok) {
-        const data = await res.json()
-        if (data.status === 'completed' || data.status === 'failed') {
-          const currentStep = step.value
-          await fetchCertificationStatus()
+const handlePhotoValidationComplete = async (photoType, originalStep) => {
+  await fetchCertificationStatus()
 
-          // Get the photo validation result for the photo we just uploaded
-          const photo = photos.value[photoType]
-          const approved = photo?.validation_status === 'approved'
+  // Get the photo validation result for the photo we uploaded
+  const photo = photos.value[photoType]
+  const approved = photo?.validation_status === 'approved'
 
-          uploading.value = false
-          validating.value = false
+  uploading.value = false
+  validating.value = false
 
-          // Show result
-          validationResult.value = {
-            approved,
-            rejection_reason: photo?.rejection_reason,
-            quality_notes: photo?.quality_notes
-          }
-
-          // Keep step where it is (override fetchCertificationStatus)
-          step.value = currentStep
-
-          if (approved) {
-            // Show success briefly, then advance
-            setTimeout(() => {
-              clearPhotoState()
-              if (currentStep < 4) {
-                step.value = currentStep + 1
-              }
-            }, 2000)
-          }
-          return
-        }
-      }
-      // Keep polling
-      setTimeout(poll, 1000)
-    } catch (err) {
-      console.error('Polling error:', err)
-      uploading.value = false
-      validating.value = false
-    }
+  // Show result
+  validationResult.value = {
+    approved,
+    rejection_reason: photo?.rejection_reason,
+    quality_notes: photo?.quality_notes
   }
-  poll()
+
+  // Keep step where it is (override fetchCertificationStatus)
+  step.value = originalStep
+
+  if (approved) {
+    // Show success briefly, then advance
+    setTimeout(() => {
+      clearPhotoState()
+      if (originalStep < 4) {
+        step.value = originalStep + 1
+      }
+    }, 2000)
+  }
 }
 
 const clearPhotoState = () => {
@@ -295,8 +278,11 @@ const generateCertificate = async () => {
     })
 
     if (res.ok) {
-      // Start polling for completion
-      startPolling()
+      const data = await res.json()
+      // Register task with global store (context: 'cert-diagnosis')
+      taskStore.addTask(data.task_id, 'cert-diagnosis', {}, async () => {
+        await handleDiagnosisComplete()
+      })
     } else {
       const data = await res.json()
       error.value = data.detail || 'Failed to generate certificate'
@@ -309,27 +295,13 @@ const generateCertificate = async () => {
   }
 }
 
-const startPolling = () => {
-  if (pollInterval) return
+const handleDiagnosisComplete = async () => {
+  await fetchCertificationStatus()
+  generating.value = false
 
-  pollInterval = setInterval(async () => {
-    await fetchCertificationStatus()
-    if (certification.value?.status === 'completed' || certification.value?.status === 'failed') {
-      stopPolling()
-      generating.value = false
-      // Refresh history when completed
-      if (certification.value?.status === 'completed') {
-        await fetchHistory()
-        selectedHistoryId.value = certificationId.value
-      }
-    }
-  }, 2000)
-}
-
-const stopPolling = () => {
-  if (pollInterval) {
-    clearInterval(pollInterval)
-    pollInterval = null
+  if (certification.value?.status === 'completed') {
+    await fetchHistory()
+    selectedHistoryId.value = certificationId.value
   }
 }
 
@@ -448,13 +420,29 @@ onMounted(async () => {
     if (cooldownDays.value === 0) {
       await startCertification()
     }
+
+    // Restore loading state if we have pending tasks
+    if (taskStore.hasPendingTasks('cert-photo')) {
+      validating.value = true
+      uploading.value = true
+      // Update callback to use current component's handler
+      taskStore.updateCallback('cert-photo', async () => {
+        await handlePhotoValidationComplete(currentPhotoType.value, step.value)
+      })
+    }
+
+    if (taskStore.hasPendingTasks('cert-diagnosis')) {
+      generating.value = true
+      step.value = 4
+      // Update callback to use current component's handler
+      taskStore.updateCallback('cert-diagnosis', async () => {
+        await handleDiagnosisComplete()
+      })
+    }
   }
   loading.value = false
 })
 
-onUnmounted(() => {
-  stopPolling()
-})
 </script>
 
 <template>

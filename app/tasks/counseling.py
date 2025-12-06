@@ -8,6 +8,7 @@ from app.llm import execute_text_task_plain
 from app.llm.prompts import build_counseling_prompt
 from app.models import Analysis, CounselingMessage, CounselingSession
 from app.models.counseling import MessageStatus
+from app.schemas import CounselingMessageResult, CounselingTaskResponse
 
 logger = logging.getLogger(__name__)
 
@@ -99,11 +100,27 @@ def generate_counseling_response_task(
             db.commit()
             logger.info(f"[{task_id}] Response generated successfully")
 
-            return {"success": True}
+            return CounselingTaskResponse(
+                success=True,
+                message=CounselingMessageResult(
+                    id=message_id,
+                    session_id=session_id,
+                    content=assistant_content,
+                    status="completed",
+                ),
+            ).model_dump()
 
         except Exception as e:
             logger.error(f"[{task_id}] Counseling response failed: {e}", exc_info=True)
             assistant_msg.status = MessageStatus.failed
             assistant_msg.content = f"Error: {str(e)}"
             db.commit()
-            return {"success": False, "error": str(e)}
+            return CounselingTaskResponse(
+                success=False,
+                message=CounselingMessageResult(
+                    id=message_id,
+                    session_id=session_id,
+                    content=f"Error: {str(e)}",
+                    status="failed",
+                ),
+            ).model_dump()
