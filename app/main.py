@@ -14,7 +14,7 @@ from app.celery_worker import celery_app
 from app.config import get_settings
 from app.db import get_db
 from app.models import Analysis, User
-from app.routers import auth_router
+from app.routers import auth_router, counseling_router
 from app.schemas import (
     AnalysisHistoryItem,
     AnalyzeResponse,
@@ -48,6 +48,7 @@ app.add_middleware(
 
 # Include routers
 app.include_router(auth_router)
+app.include_router(counseling_router)
 
 # Serve static frontend files if they exist (built Vue app)
 STATIC_DIR = FilePath(__file__).parent.parent / "frontend" / "dist"
