@@ -1,4 +1,5 @@
 from sqlalchemy import Boolean, Column, Integer, String, Text
+from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import relationship
 from ulid import ULID
 
@@ -16,6 +17,7 @@ class User(Base, TimestampMixin):
     is_premium = Column(Boolean, default=False, nullable=False)
     is_admin = Column(Boolean, default=False, nullable=False)
     free_analyses_remaining = Column(Integer, default=1, nullable=False)
+    options = Column(JSONB, default=dict, nullable=False)
 
     # Relationships
     analyses = relationship("Analysis", back_populates="user", cascade="all, delete-orphan")

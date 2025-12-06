@@ -80,3 +80,11 @@ class AnalysisHistoryItem(BaseModel):
     created_at: datetime = Field(..., description="When the analysis was created")
 
     model_config = {"from_attributes": True}
+
+
+class UserOptions(BaseModel):
+    """User options/preferences stored in JSONB."""
+
+    completed_captcha: bool = Field(
+        default=False, description="Whether user has completed the donate captcha"
+    )

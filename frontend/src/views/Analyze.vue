@@ -2,6 +2,8 @@
 import { ref, computed, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { useAuthStore } from '../stores/auth'
+import DonatePopup from '../components/DonatePopup.vue'
+import DonateCaptcha from '../components/DonateCaptcha.vue'
 
 const router = useRouter()
 const authStore = useAuthStore()
@@ -27,6 +29,44 @@ const historyLoading = ref(false)
 
 // Toast for delete message
 const toast = ref(null)
+
+// Donate popup
+const showDonatePopup = ref(false)
+const showDonateCaptcha = ref(false)
+
+const handleDonate = () => {
+  showDonatePopup.value = false
+  showDonateCaptcha.value = false
+  // TODO: integrate with Stripe
+  window.open('https://buy.stripe.com/test_xxx', '_blank')
+}
+
+const handleCaptchaComplete = async () => {
+  showDonateCaptcha.value = false
+  try {
+    await fetch(`${API_URL}/api/auth/captcha-completed`, {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${authStore.token}`,
+      },
+    })
+    // Refresh user to update options
+    await authStore.fetchUser()
+  } catch (err) {
+    console.error('Failed to mark captcha completed:', err)
+  }
+}
+
+// Show captcha after 2s if user hasn't completed it
+const initCaptchaTimer = () => {
+  if (!authStore.user?.options?.completed_captcha) {
+    setTimeout(() => {
+      if (!authStore.user?.options?.completed_captcha) {
+        showDonateCaptcha.value = true
+      }
+    }, 2000)
+  }
+}
 const deletionQuotes = [
   "Ah, the digital eraser—as if forgetting changes what was seen.",
   "Deleting the evidence doesn't delete the follicles. Or their absence.",
@@ -100,6 +140,7 @@ const viewAnalysis = (item) => {
 
 onMounted(() => {
   fetchHistory()
+  initCaptchaTimer()
 })
 
 const onFileSelect = (event) => {
@@ -486,6 +527,19 @@ const formatDate = (dateStr) => {
         </div>
       </Transition>
     </Teleport>
+
+    <!-- Donate popup -->
+    <DonatePopup
+      v-if="showDonatePopup"
+      @close="showDonatePopup = false"
+      @donate="handleDonate"
+    />
+
+    <!-- Donate captcha -->
+    <DonateCaptcha
+      v-if="showDonateCaptcha"
+      @close="handleCaptchaComplete"
+    />
   </div>
 </template>
 
