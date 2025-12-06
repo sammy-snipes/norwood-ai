@@ -15,6 +15,7 @@ from app.config import get_settings
 from app.db import get_db
 from app.models import Analysis, User
 from app.routers import auth_router, counseling_router
+from app.routers.payments import router as payments_router
 from app.schemas import (
     AnalysisHistoryItem,
     AnalyzeResponse,
@@ -49,6 +50,7 @@ app.add_middleware(
 # Include routers
 app.include_router(auth_router)
 app.include_router(counseling_router)
+app.include_router(payments_router)
 
 # Serve static frontend files if they exist (built Vue app)
 STATIC_DIR = FilePath(__file__).parent.parent / "frontend" / "dist"
@@ -111,6 +113,8 @@ async def submit_analysis(
     Submit an image for Norwood scale analysis.
 
     Returns a task_id that can be polled for results.
+
+    Free users get 1 analysis. Premium users get unlimited analyses.
     """
     logger.info(
         f"[DEBUG] Received analyze request - file: {file.filename}, type: {file.content_type}, user: {user.email}"
@@ -122,6 +126,14 @@ async def submit_analysis(
         raise HTTPException(
             status_code=http_status.HTTP_402_PAYMENT_REQUIRED,
             detail="No analyses remaining. Upgrade to premium for unlimited analyses.",
+        )
+
+    # Decrement free analyses for non-premium users
+    if not user.is_admin and not user.is_premium:
+        user.free_analyses_remaining -= 1
+        db.commit()
+        logger.info(
+            f"[DEBUG] User {user.id} has {user.free_analyses_remaining} free analyses remaining"
         )
 
     # Validate file type
