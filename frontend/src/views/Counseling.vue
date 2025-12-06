@@ -2,6 +2,7 @@
 import { ref, computed, onMounted, onUnmounted, nextTick } from 'vue'
 import { useAuthStore } from '../stores/auth'
 import AppHeader from '../components/AppHeader.vue'
+import HistorySidebar from '../components/HistorySidebar.vue'
 import { marked } from 'marked'
 
 // Configure marked for safe rendering
@@ -263,41 +264,19 @@ onUnmounted(() => {
     <!-- Main Content -->
     <div v-else class="flex h-[calc(100vh-41px)]">
       <!-- Sessions Sidebar -->
-      <aside class="w-56 border-r border-gray-800 h-[calc(100vh-41px)] flex flex-col">
-        <button
-          @click="createSession"
-          class="m-2 py-1.5 bg-gray-800 hover:bg-gray-700 rounded text-[11px] text-gray-300 transition-colors"
-        >
-          + New Session
-        </button>
-
-        <div class="flex-1 overflow-y-auto">
-          <div
-            v-for="session in sessions"
-            :key="session.id"
-            @click="selectSession(session.id)"
-            class="group px-3 py-1.5 cursor-pointer flex items-center justify-between transition-colors"
-            :class="activeSession === session.id ? 'bg-gray-800' : 'hover:bg-gray-800/50'"
-          >
-            <div class="min-w-0 flex-1">
-              <p class="text-[11px] text-gray-300 truncate">
-                {{ session.title || 'New session' }}
-              </p>
-              <p class="text-[10px] text-gray-600">{{ formatDate(session.created_at) }}</p>
-            </div>
-            <button
-              @click.stop="deleteSession(session.id)"
-              class="hidden group-hover:block text-[10px] text-gray-600 hover:text-red-400 ml-2"
-            >
-              ✕
-            </button>
-          </div>
-
-          <p v-if="sessions.length === 0" class="px-3 py-4 text-[11px] text-gray-600 text-center">
-            No sessions yet
-          </p>
-        </div>
-      </aside>
+      <HistorySidebar
+        :items="sessions"
+        :selected-id="activeSession"
+        new-button-text="+ New Session"
+        empty-text="No sessions yet"
+        always-show
+        @new="createSession"
+        @select="(item) => selectSession(item.id)"
+        @delete="deleteSession"
+      >
+        <template #title="{ item }">{{ item.title || 'New session' }}</template>
+        <template #date="{ item }">{{ formatDate(item.created_at) }}</template>
+      </HistorySidebar>
 
       <!-- Chat Area -->
       <main class="flex-1 flex flex-col min-h-0">

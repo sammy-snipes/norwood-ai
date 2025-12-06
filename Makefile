@@ -46,7 +46,7 @@ help:
 .PHONY: install
 install:
 	@echo "Installing Python dependencies..."
-	uv sync
+	uv sync --extra dev
 	@echo "Installing frontend dependencies..."
 	cd frontend && npm install
 	@echo "Installation complete."

@@ -39,6 +39,14 @@ const handleLogout = () => {
             Counseling
           </router-link>
           <router-link
+            to="/certification"
+            class="text-xs transition-colors flex items-center gap-1"
+            :class="$route.path === '/certification' ? 'text-gray-400' : 'text-gray-500 hover:text-gray-300'"
+          >
+            Certification
+            <span v-if="!hasUnlimited" class="text-[9px] text-purple-400 bg-purple-900/50 px-1 rounded">PRO</span>
+          </router-link>
+          <router-link
             to="/settings"
             class="text-xs transition-colors"
             :class="$route.path === '/settings' ? 'text-gray-400' : 'text-gray-500 hover:text-gray-300'"

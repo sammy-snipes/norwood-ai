@@ -14,7 +14,7 @@ from app.celery_worker import celery_app
 from app.config import get_settings
 from app.db import get_db
 from app.models import Analysis, User
-from app.routers import auth_router, counseling_router
+from app.routers import auth_router, certification_router, counseling_router
 from app.routers.payments import router as payments_router
 from app.schemas import (
     AnalysisHistoryItem,
@@ -50,6 +50,7 @@ app.add_middleware(
 # Include routers
 app.include_router(auth_router)
 app.include_router(counseling_router)
+app.include_router(certification_router)
 app.include_router(payments_router)
 
 # Serve static frontend files if they exist (built Vue app)
@@ -175,9 +176,10 @@ def get_task_status(
     task_id: str = Path(..., description="Task ID to check"),
 ) -> TaskStatusResponse:
     """
-    Get the status of an analysis task.
+    Get the status of a Celery task.
 
     Poll this endpoint until status is 'completed' or 'failed'.
+    Works for analyze, certification validation, and other tasks.
     """
     task_result = celery_app.AsyncResult(task_id)
 
@@ -192,10 +194,12 @@ def get_task_status(
             result = task_result.result
             if result.get("success"):
                 response.status = "completed"
-                response.result = AnalyzeResponse(
-                    success=True,
-                    analysis=result["analysis"],
-                )
+                # Only include AnalyzeResponse if this is an analysis task
+                if "analysis" in result:
+                    response.result = AnalyzeResponse(
+                        success=True,
+                        analysis=result["analysis"],
+                    )
             else:
                 response.status = "failed"
                 response.error = result.get("error", "Unknown error")

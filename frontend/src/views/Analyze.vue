@@ -2,6 +2,7 @@
 import { ref, computed, onMounted } from 'vue'
 import { useAuthStore } from '../stores/auth'
 import AppHeader from '../components/AppHeader.vue'
+import HistorySidebar from '../components/HistorySidebar.vue'
 import DonatePopup from '../components/DonatePopup.vue'
 import DonateCaptcha from '../components/DonateCaptcha.vue'
 
@@ -318,51 +319,22 @@ const formatDate = (dateStr) => {
     <!-- Main Content with Sidebar -->
     <div class="flex">
       <!-- Sidebar: Analysis History -->
-      <aside class="w-56 border-r border-gray-800 h-[calc(100vh-41px)] hidden lg:flex lg:flex-col">
-        <!-- New Analysis button -->
-        <button
-          @click="reset"
-          class="m-2 py-1.5 bg-gray-800 hover:bg-gray-700 rounded text-[11px] text-gray-300 transition-colors"
-        >
-          + New Analysis
-        </button>
-
-        <h2 class="text-[10px] font-semibold text-gray-500 uppercase tracking-wide mb-2 px-3">
-          History
-        </h2>
-
-        <div v-if="historyLoading" class="text-gray-500 text-[11px] px-3">
-          Loading...
-        </div>
-
-        <div v-else-if="analysisHistory.length === 0" class="text-gray-500 text-[11px] px-3">
-          No analyses yet
-        </div>
-
-        <div class="flex-1 overflow-y-auto">
-          <div
-            v-for="item in analysisHistory"
-            :key="item.id"
-            @click="viewAnalysis(item)"
-            :class="[
-              'group px-3 py-1.5 transition-colors cursor-pointer flex items-center gap-2',
-              selectedHistoryId === item.id
-                ? 'bg-gray-700'
-                : 'hover:bg-gray-800/50'
-            ]"
-          >
-            <span :class="['text-[11px] font-bold w-3', getStageColor(item.norwood_stage)]">{{ formatStage(item.norwood_stage) }}</span>
-            <span class="text-[11px] text-gray-400 truncate flex-1">{{ item.title }}</span>
-            <span class="text-[10px] text-gray-600 whitespace-nowrap group-hover:hidden">{{ formatDate(item.created_at) }}</span>
-            <button
-              @click.stop="deleteAnalysis(item.id)"
-              class="hidden group-hover:block text-[10px] text-gray-600 hover:text-red-400 transition-colors"
-            >
-              ✕
-            </button>
-          </div>
-        </div>
-      </aside>
+      <HistorySidebar
+        :items="analysisHistory"
+        :selected-id="selectedHistoryId"
+        :loading="historyLoading"
+        new-button-text="+ New Analysis"
+        empty-text="No analyses yet"
+        @new="reset"
+        @select="viewAnalysis"
+        @delete="deleteAnalysis"
+      >
+        <template #badge="{ item }">
+          <span :class="['text-[11px] font-bold w-3', getStageColor(item.norwood_stage)]">{{ formatStage(item.norwood_stage) }}</span>
+        </template>
+        <template #title="{ item }">{{ item.title }}</template>
+        <template #date="{ item }">{{ formatDate(item.created_at) }}</template>
+      </HistorySidebar>
 
       <!-- Main Content -->
       <main class="flex-1 p-6 h-[calc(100vh-41px)] overflow-y-auto">
