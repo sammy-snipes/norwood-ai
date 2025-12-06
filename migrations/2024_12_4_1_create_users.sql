@@ -11,6 +11,7 @@ CREATE TABLE users (
     is_premium BOOLEAN DEFAULT FALSE NOT NULL,
     is_admin BOOLEAN DEFAULT FALSE NOT NULL,
     free_analyses_remaining INTEGER DEFAULT 1 NOT NULL,
+    options JSONB DEFAULT '{}' NOT NULL,
     created_at TIMESTAMPTZ DEFAULT NOW() NOT NULL,
     updated_at TIMESTAMPTZ DEFAULT NOW() NOT NULL
 );

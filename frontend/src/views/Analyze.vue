@@ -1,17 +1,11 @@
 <script setup>
 import { ref, computed, onMounted } from 'vue'
-import { useRouter } from 'vue-router'
 import { useAuthStore } from '../stores/auth'
+import AppHeader from '../components/AppHeader.vue'
 import DonatePopup from '../components/DonatePopup.vue'
 import DonateCaptcha from '../components/DonateCaptcha.vue'
 
-const router = useRouter()
 const authStore = useAuthStore()
-
-const handleLogout = () => {
-  authStore.logout()
-  router.push('/')
-}
 
 const API_URL = import.meta.env.DEV ? 'http://localhost:8000' : ''
 
@@ -319,93 +313,50 @@ const formatDate = (dateStr) => {
 
 <template>
   <div class="min-h-screen bg-gray-900 text-white">
-    <!-- Header -->
-    <header class="border-b border-gray-800 px-4 py-2">
-      <div class="flex items-center justify-between">
-        <div class="flex items-center gap-6">
-          <router-link to="/analyze" class="font-medium text-sm">
-            Norwood AI
-          </router-link>
-          <nav class="flex gap-4">
-            <router-link to="/analyze" class="text-xs text-gray-400 hover:text-white transition-colors">
-              Analyze
-            </router-link>
-            <router-link to="/settings" class="text-xs text-gray-500 hover:text-gray-300 transition-colors">
-              Settings
-            </router-link>
-          </nav>
-        </div>
-        <div class="flex items-center gap-3">
-          <!-- Tier badge -->
-          <span v-if="hasUnlimited" class="text-xs text-purple-400">
-            {{ authStore.user?.is_admin ? 'Admin' : 'Premium' }}
-          </span>
-          <span v-else-if="authStore.user?.free_analyses_remaining > 0" class="text-xs text-gray-500">
-            {{ authStore.user?.free_analyses_remaining }} free
-          </span>
-          <span v-else class="text-xs text-orange-400">
-            0 remaining
-          </span>
-          <div class="flex items-center gap-2">
-            <img
-              v-if="authStore.user?.avatar_url"
-              :src="authStore.user.avatar_url"
-              class="w-5 h-5 rounded-full"
-            />
-            <span class="text-gray-500 text-xs">{{ authStore.user?.name }}</span>
-          </div>
-          <button
-            @click="handleLogout"
-            class="text-gray-600 hover:text-gray-400 text-xs"
-          >
-            Logout
-          </button>
-        </div>
-      </div>
-    </header>
+    <AppHeader />
 
     <!-- Main Content with Sidebar -->
     <div class="flex">
       <!-- Sidebar: Analysis History -->
-      <aside class="w-64 border-r border-gray-800 min-h-[calc(100vh-41px)] p-3 hidden lg:flex lg:flex-col overflow-y-auto">
+      <aside class="w-56 border-r border-gray-800 h-[calc(100vh-41px)] hidden lg:flex lg:flex-col">
         <!-- New Analysis button -->
         <button
           @click="reset"
-          class="w-full mb-3 py-2 bg-gray-800 hover:bg-gray-700 rounded text-xs text-gray-300 transition-colors"
+          class="m-2 py-1.5 bg-gray-800 hover:bg-gray-700 rounded text-[11px] text-gray-300 transition-colors"
         >
           + New Analysis
         </button>
 
-        <h2 class="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-3">
+        <h2 class="text-[10px] font-semibold text-gray-500 uppercase tracking-wide mb-2 px-3">
           History
         </h2>
 
-        <div v-if="historyLoading" class="text-gray-500 text-xs">
+        <div v-if="historyLoading" class="text-gray-500 text-[11px] px-3">
           Loading...
         </div>
 
-        <div v-else-if="analysisHistory.length === 0" class="text-gray-500 text-xs">
+        <div v-else-if="analysisHistory.length === 0" class="text-gray-500 text-[11px] px-3">
           No analyses yet
         </div>
 
-        <div v-else class="space-y-1 flex-1">
+        <div class="flex-1 overflow-y-auto">
           <div
             v-for="item in analysisHistory"
             :key="item.id"
             @click="viewAnalysis(item)"
             :class="[
-              'group px-2 py-1.5 rounded transition-colors cursor-pointer flex items-center gap-2',
+              'group px-3 py-1.5 transition-colors cursor-pointer flex items-center gap-2',
               selectedHistoryId === item.id
                 ? 'bg-gray-700'
                 : 'hover:bg-gray-800/50'
             ]"
           >
-            <span :class="['text-sm font-bold w-4', getStageColor(item.norwood_stage)]">{{ formatStage(item.norwood_stage) }}</span>
-            <span class="text-xs text-gray-400 truncate flex-1">{{ item.title }}</span>
-            <span class="text-xs text-gray-600 whitespace-nowrap group-hover:hidden">{{ formatDate(item.created_at) }}</span>
+            <span :class="['text-[11px] font-bold w-3', getStageColor(item.norwood_stage)]">{{ formatStage(item.norwood_stage) }}</span>
+            <span class="text-[11px] text-gray-400 truncate flex-1">{{ item.title }}</span>
+            <span class="text-[10px] text-gray-600 whitespace-nowrap group-hover:hidden">{{ formatDate(item.created_at) }}</span>
             <button
               @click.stop="deleteAnalysis(item.id)"
-              class="hidden group-hover:block text-xs text-gray-600 hover:text-red-400 transition-colors"
+              class="hidden group-hover:block text-[10px] text-gray-600 hover:text-red-400 transition-colors"
             >
               ✕
             </button>
@@ -414,7 +365,7 @@ const formatDate = (dateStr) => {
       </aside>
 
       <!-- Main Content -->
-      <main class="flex-1 p-6">
+      <main class="flex-1 p-6 h-[calc(100vh-41px)] overflow-y-auto">
         <div class="max-w-xl mx-auto">
         <!-- Upload Area -->
         <div

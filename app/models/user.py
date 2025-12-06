@@ -22,6 +22,9 @@ class User(Base, TimestampMixin):
     # Relationships
     analyses = relationship("Analysis", back_populates="user", cascade="all, delete-orphan")
     payments = relationship("Payment", back_populates="user", cascade="all, delete-orphan")
+    counseling_sessions = relationship(
+        "CounselingSession", back_populates="user", cascade="all, delete-orphan"
+    )
 
     def __repr__(self) -> str:
         return f"<User {self.email}>"

@@ -3,6 +3,7 @@ import { useAuthStore } from '../stores/auth'
 
 import Landing from '../views/Landing.vue'
 import Analyze from '../views/Analyze.vue'
+import Counseling from '../views/Counseling.vue'
 import Settings from '../views/Settings.vue'
 
 const routes = [
@@ -16,6 +17,12 @@ const routes = [
     path: '/analyze',
     name: 'analyze',
     component: Analyze,
+    meta: { requiresAuth: true }
+  },
+  {
+    path: '/counseling',
+    name: 'counseling',
+    component: Counseling,
     meta: { requiresAuth: true }
   },
   {
