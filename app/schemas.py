@@ -67,6 +67,32 @@ class TaskStatusResponse(BaseModel):
     error: str | None = Field(None, description="Error message if failed")
 
 
+# Payment Schemas
+class CheckoutSessionResponse(BaseModel):
+    """Response from creating a Stripe checkout session."""
+
+    checkout_url: str = Field(..., description="Stripe Checkout URL to redirect user to")
+
+
+class PaymentRecord(BaseModel):
+    """Individual payment record."""
+
+    id: str = Field(..., description="Payment ID")
+    stripe_payment_id: str = Field(..., description="Stripe payment intent ID")
+    amount_cents: int = Field(..., description="Amount paid in cents")
+    status: str = Field(..., description="Payment status: pending, succeeded, failed")
+    created_at: datetime = Field(..., description="Payment creation timestamp")
+
+    model_config = {"from_attributes": True}
+
+
+class PaymentStatusResponse(BaseModel):
+    """User's premium status and payment history."""
+
+    is_premium: bool = Field(..., description="Whether user has premium access")
+    payments: list[PaymentRecord] = Field(..., description="List of user's payments")
+
+
 class AnalysisHistoryItem(BaseModel):
     """A single analysis in the user's history."""
 

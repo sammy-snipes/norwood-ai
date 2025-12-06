@@ -5,6 +5,8 @@ import Landing from '../views/Landing.vue'
 import Analyze from '../views/Analyze.vue'
 import Counseling from '../views/Counseling.vue'
 import Settings from '../views/Settings.vue'
+import CheckoutSuccess from '../views/CheckoutSuccess.vue'
+import CheckoutCancel from '../views/CheckoutCancel.vue'
 
 const routes = [
   {
@@ -29,6 +31,18 @@ const routes = [
     path: '/settings',
     name: 'settings',
     component: Settings,
+    meta: { requiresAuth: true }
+  },
+  {
+    path: '/checkout/success',
+    name: 'checkout-success',
+    component: CheckoutSuccess,
+    meta: { requiresAuth: true }
+  },
+  {
+    path: '/checkout/cancel',
+    name: 'checkout-cancel',
+    component: CheckoutCancel,
     meta: { requiresAuth: true }
   }
 ]

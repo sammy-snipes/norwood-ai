@@ -85,8 +85,6 @@ class Settings(BaseSettings):
     STRIPE_PUBLISHABLE_KEY: str = ""
     STRIPE_WEBHOOK_SECRET: str = ""
     STRIPE_PREMIUM_PRICE_ID: str = ""
-    STRIPE_SUCCESS_URL: str = ""
-    STRIPE_CANCEL_URL: str = ""
 
     # App config
     MAX_IMAGE_SIZE_MB: int = 10
@@ -110,6 +108,16 @@ class Settings(BaseSettings):
         if self.is_prod:
             return ["https://norwood-ai.com", "http://norwood-ai.com"]
         return ["http://localhost:5173", "http://127.0.0.1:5173", "http://localhost:8000"]
+
+    @property
+    def STRIPE_SUCCESS_URL(self) -> str:
+        """Dynamic Stripe success URL based on environment."""
+        return f"{self.FRONTEND_URL}/checkout/success"
+
+    @property
+    def STRIPE_CANCEL_URL(self) -> str:
+        """Dynamic Stripe cancel URL based on environment."""
+        return f"{self.FRONTEND_URL}/checkout/cancel"
 
     @property
     def database_url(self) -> str:
