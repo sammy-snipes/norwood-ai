@@ -25,6 +25,10 @@ GOOGLE_USERINFO_URL = "https://www.googleapis.com/oauth2/v2/userinfo"
 
 
 # Schemas
+class UserOptionsResponse(BaseModel):
+    completed_captcha: bool = False
+
+
 class UserResponse(BaseModel):
     id: str
     email: str
@@ -33,8 +37,24 @@ class UserResponse(BaseModel):
     is_premium: bool
     is_admin: bool
     free_analyses_remaining: int
+    options: UserOptionsResponse = UserOptionsResponse()
 
     model_config = {"from_attributes": True}
+
+    @classmethod
+    def from_user(cls, user) -> "UserResponse":
+        """Convert User model to response, handling JSONB options."""
+        opts = user.options or {}
+        return cls(
+            id=user.id,
+            email=user.email,
+            name=user.name,
+            avatar_url=user.avatar_url,
+            is_premium=user.is_premium,
+            is_admin=user.is_admin,
+            free_analyses_remaining=user.free_analyses_remaining,
+            options=UserOptionsResponse(**opts),
+        )
 
 
 class TokenResponse(BaseModel):
@@ -214,4 +234,42 @@ def get_me(
             detail="User not found",
         )
 
-    return user
+    return UserResponse.from_user(user)
+
+
+@router.post("/captcha-completed")
+def mark_captcha_completed(
+    authorization: str | None = Header(None),
+    db: Session = Depends(get_db),
+):
+    """Mark the donate captcha as completed for the current user."""
+    if not authorization or not authorization.startswith("Bearer "):
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Not authenticated",
+        )
+
+    token = authorization.replace("Bearer ", "")
+    user_id = decode_token(token)
+
+    if not user_id:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Invalid token",
+        )
+
+    user = db.query(User).filter(User.id == user_id).first()
+
+    if not user:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="User not found",
+        )
+
+    # Update options
+    options = user.options or {}
+    options["completed_captcha"] = True
+    user.options = options
+    db.commit()
+
+    return {"success": True}
