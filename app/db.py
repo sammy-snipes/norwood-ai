@@ -1,28 +1,38 @@
 from collections.abc import Generator
 from contextlib import contextmanager
+from functools import lru_cache
 
 from sqlalchemy import create_engine
+from sqlalchemy.engine import Engine
 from sqlalchemy.orm import Session, sessionmaker
 
 from app.config import get_settings
 
-settings = get_settings()
 
-engine = create_engine(
-    settings.database_url,
-    pool_size=5,
-    max_overflow=10,
-    pool_timeout=30,
-    pool_recycle=3600,
-    pool_pre_ping=True,
-)
+@lru_cache
+def get_engine() -> Engine:
+    """Get or create the database engine."""
+    settings = get_settings()
+    if not settings.DATABASE_URL:
+        raise ValueError("DATABASE_URL not configured")
+    return create_engine(
+        settings.DATABASE_URL,
+        pool_size=5,
+        max_overflow=10,
+        pool_timeout=30,
+        pool_recycle=3600,
+        pool_pre_ping=True,
+    )
 
-SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
+
+def get_session_local() -> sessionmaker:
+    """Get the session factory."""
+    return sessionmaker(autocommit=False, autoflush=False, bind=get_engine())
 
 
 def get_db() -> Generator[Session, None, None]:
     """FastAPI dependency for database sessions."""
-    db = SessionLocal()
+    db = get_session_local()()
     try:
         yield db
     finally:
@@ -32,7 +42,7 @@ def get_db() -> Generator[Session, None, None]:
 @contextmanager
 def get_db_context() -> Generator[Session, None, None]:
     """Context manager for database sessions (use outside of FastAPI routes)."""
-    db = SessionLocal()
+    db = get_session_local()()
     try:
         yield db
         db.commit()
