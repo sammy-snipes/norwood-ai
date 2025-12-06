@@ -13,7 +13,11 @@ celery_app = Celery(
     "norwood_ai",
     broker=settings.CELERY_BROKER_URL,
     backend=settings.CELERY_RESULT_BACKEND,
-    include=["app.tasks.analyze"],
+    include=[
+        "app.tasks.analyze",
+        "app.tasks.counseling",
+        "app.tasks.certification",
+    ],
 )
 
 celery_app.conf.update(

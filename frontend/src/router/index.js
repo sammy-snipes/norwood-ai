@@ -4,6 +4,7 @@ import { useAuthStore } from '../stores/auth'
 import Landing from '../views/Landing.vue'
 import Analyze from '../views/Analyze.vue'
 import Counseling from '../views/Counseling.vue'
+import Certification from '../views/Certification.vue'
 import Settings from '../views/Settings.vue'
 import CheckoutSuccess from '../views/CheckoutSuccess.vue'
 import CheckoutCancel from '../views/CheckoutCancel.vue'
@@ -25,6 +26,12 @@ const routes = [
     path: '/counseling',
     name: 'counseling',
     component: Counseling,
+    meta: { requiresAuth: true }
+  },
+  {
+    path: '/certification',
+    name: 'certification',
+    component: Certification,
     meta: { requiresAuth: true }
   },
   {
