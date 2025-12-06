@@ -119,13 +119,11 @@ export const useTaskStore = defineStore('tasks', () => {
 
         if (res.ok) {
           const data = await res.json()
-          console.log(`[TaskStore] Poll ${taskId}: ${data.status}`, data)
 
           if (data.status === 'completed' || data.status === 'failed') {
             // Task is done - call callback and remove
             const callback = task.callback
             const metadata = task.metadata
-            console.log(`[TaskStore] Task ${taskId} done, calling callback`, { metadata, hasCallback: !!callback })
             removeTask(taskId)
 
             if (callback) {
