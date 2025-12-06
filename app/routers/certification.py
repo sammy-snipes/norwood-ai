@@ -421,7 +421,7 @@ def delete_certification(
     user: User = Depends(require_premium),
     db: Session = Depends(get_db),
 ):
-    """Delete an incomplete certification."""
+    """Delete a certification."""
     certification = (
         db.query(Certification)
         .filter(
@@ -434,14 +434,18 @@ def delete_certification(
     if not certification:
         raise HTTPException(status_code=404, detail="Certification not found")
 
-    if certification.status == CertificationStatus.completed:
-        raise HTTPException(status_code=400, detail="Cannot delete completed certification")
-
     # Delete photos from S3
     s3 = S3Service()
     for photo in certification.photos:
         try:
             s3.delete_image(photo.s3_key)
+        except Exception:
+            pass
+
+    # Delete PDF if exists
+    if certification.pdf_s3_key:
+        try:
+            s3.delete_image(certification.pdf_s3_key)
         except Exception:
             pass
 

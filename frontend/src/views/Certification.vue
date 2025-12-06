@@ -2,6 +2,7 @@
 import { ref, computed, onMounted, onUnmounted } from 'vue'
 import { useAuthStore } from '../stores/auth'
 import AppHeader from '../components/AppHeader.vue'
+import HistorySidebar from '../components/HistorySidebar.vue'
 
 const authStore = useAuthStore()
 const API_URL = import.meta.env.DEV ? 'http://localhost:8000' : ''
@@ -20,6 +21,14 @@ const generating = ref(false)
 const cooldownDays = ref(0)
 const loading = ref(true)
 const error = ref(null)
+
+// Certification history for sidebar
+const certHistory = ref([])
+const historyLoading = ref(false)
+const selectedHistoryId = ref(null)
+
+// File input ref for manual reset
+const fileInputRef = ref(null)
 
 let pollInterval = null
 
@@ -159,8 +168,8 @@ const uploadPhoto = async () => {
 
     if (res.ok) {
       const data = await res.json()
-      // Start polling for validation result
-      pollPhotoValidation(data.photo_id, data.task_id)
+      // Start polling for validation result (pass current photo type)
+      pollPhotoValidation(data.photo_id, data.task_id, currentPhotoType.value)
     } else {
       const data = await res.json()
       error.value = data.detail || 'Failed to upload photo'
@@ -175,7 +184,7 @@ const uploadPhoto = async () => {
   }
 }
 
-const pollPhotoValidation = async (photoId, taskId) => {
+const pollPhotoValidation = async (photoId, taskId, photoType) => {
   const poll = async () => {
     try {
       const res = await fetch(`${API_URL}/tasks/${taskId}`, {
@@ -184,21 +193,35 @@ const pollPhotoValidation = async (photoId, taskId) => {
       if (res.ok) {
         const data = await res.json()
         if (data.status === 'completed' || data.status === 'failed') {
-          // Fetch updated certification status
+          const currentStep = step.value
           await fetchCertificationStatus()
 
-          // Get the photo validation result
-          const photo = photos.value[currentPhotoType.value]
-          if (photo) {
-            validationResult.value = {
-              approved: photo.validation_status === 'approved',
-              rejection_reason: photo.rejection_reason,
-              quality_notes: photo.quality_notes
-            }
-          }
+          // Get the photo validation result for the photo we just uploaded
+          const photo = photos.value[photoType]
+          const approved = photo?.validation_status === 'approved'
 
           uploading.value = false
           validating.value = false
+
+          // Show result
+          validationResult.value = {
+            approved,
+            rejection_reason: photo?.rejection_reason,
+            quality_notes: photo?.quality_notes
+          }
+
+          // Keep step where it is (override fetchCertificationStatus)
+          step.value = currentStep
+
+          if (approved) {
+            // Show success briefly, then advance
+            setTimeout(() => {
+              clearPhotoState()
+              if (currentStep < 4) {
+                step.value = currentStep + 1
+              }
+            }, 2000)
+          }
           return
         }
       }
@@ -247,15 +270,15 @@ const nextStep = () => {
 
 const prevStep = () => {
   if (step.value > 1) {
-    step.value--
     clearPhotoState()
+    step.value--
   }
 }
 
 const goToStep = (targetStep) => {
   if (targetStep >= 1 && targetStep <= 4) {
-    step.value = targetStep
     clearPhotoState()
+    step.value = targetStep
   }
 }
 
@@ -294,6 +317,11 @@ const startPolling = () => {
     if (certification.value?.status === 'completed' || certification.value?.status === 'failed') {
       stopPolling()
       generating.value = false
+      // Refresh history when completed
+      if (certification.value?.status === 'completed') {
+        await fetchHistory()
+        selectedHistoryId.value = certificationId.value
+      }
     }
   }, 2000)
 }
@@ -324,9 +352,98 @@ const formatDate = (dateStr) => {
   return date.toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' })
 }
 
+const formatDateShort = (dateStr) => {
+  if (!dateStr) return ''
+  const date = new Date(dateStr)
+  const now = new Date()
+  const isToday = date.toDateString() === now.toDateString()
+  if (isToday) {
+    return date.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' })
+  }
+  return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })
+}
+
+// Fetch certification history
+const fetchHistory = async () => {
+  if (!authStore.token) return
+
+  historyLoading.value = true
+  try {
+    const res = await fetch(`${API_URL}/api/certification/history`, {
+      headers: { 'Authorization': `Bearer ${authStore.token}` }
+    })
+    if (res.ok) {
+      certHistory.value = await res.json()
+    }
+  } catch (err) {
+    console.error('Failed to fetch history:', err)
+  } finally {
+    historyLoading.value = false
+  }
+}
+
+// View a past certification
+const viewCertification = async (item) => {
+  selectedHistoryId.value = item.id
+  certificationId.value = item.id
+  await fetchCertificationStatus()
+  step.value = 4
+}
+
+// Start a new certification
+const startNew = async () => {
+  selectedHistoryId.value = null
+  certificationId.value = null
+  certification.value = null
+  photos.value = {}
+  step.value = 1
+  clearPhotoState()
+  await startCertification()
+}
+
+// Restart current certification from beginning
+const restartCurrent = async () => {
+  if (!certificationId.value) return
+
+  try {
+    // Delete the current incomplete certification
+    await fetch(`${API_URL}/api/certification/${certificationId.value}`, {
+      method: 'DELETE',
+      headers: { 'Authorization': `Bearer ${authStore.token}` }
+    })
+    // Start fresh
+    await startNew()
+  } catch (err) {
+    console.error('Failed to restart:', err)
+  }
+}
+
+// Delete a certification from history
+const deleteCertification = async (id) => {
+  try {
+    const res = await fetch(`${API_URL}/api/certification/${id}`, {
+      method: 'DELETE',
+      headers: { 'Authorization': `Bearer ${authStore.token}` }
+    })
+
+    if (res.ok) {
+      // Refresh history
+      await fetchHistory()
+
+      // If we deleted the current one, start new
+      if (selectedHistoryId.value === id) {
+        await startNew()
+      }
+    }
+  } catch (err) {
+    console.error('Failed to delete:', err)
+  }
+}
+
 // Lifecycle
 onMounted(async () => {
   if (isPremium.value) {
+    await fetchHistory()
     await checkCooldown()
     if (cooldownDays.value === 0) {
       await startCertification()
@@ -369,8 +486,29 @@ onUnmounted(() => {
       </div>
     </div>
 
-    <!-- Main Content -->
-    <div v-else class="max-w-2xl mx-auto px-4 py-8">
+    <!-- Main Content with Sidebar -->
+    <div v-else class="flex">
+      <!-- Sidebar: Certification History -->
+      <HistorySidebar
+        :items="certHistory"
+        :selected-id="selectedHistoryId"
+        :loading="historyLoading"
+        new-button-text="+ New Certification"
+        empty-text="No certifications yet"
+        @new="startNew"
+        @select="viewCertification"
+        @delete="deleteCertification"
+      >
+        <template #badge="{ item }">
+          <span v-if="item.norwood_stage" class="text-[11px] font-bold text-purple-400 w-4">{{ item.norwood_stage }}{{ item.norwood_variant || '' }}</span>
+        </template>
+        <template #title="{ item }">{{ item.norwood_stage ? `Norwood ${item.norwood_stage}${item.norwood_variant || ''}` : 'In Progress' }}</template>
+        <template #date="{ item }">{{ formatDateShort(item.certified_at) }}</template>
+      </HistorySidebar>
+
+      <!-- Main Content -->
+      <main class="flex-1 p-6 h-[calc(100vh-41px)] overflow-y-auto">
+        <div class="max-w-2xl mx-auto">
       <!-- Progress Steps -->
       <div class="flex items-center justify-center mb-8">
         <div v-for="(type, index) in [...photoTypes, 'result']" :key="type" class="flex items-center">
@@ -404,16 +542,25 @@ onUnmounted(() => {
       </div>
 
       <!-- Photo Upload Steps (1-3) -->
-      <div v-if="step <= 3" class="bg-gray-800 rounded-lg p-6">
+      <template v-if="step <= 3">
+      <div :key="step" class="bg-gray-800 rounded-lg p-6">
         <div class="flex items-center justify-between mb-2">
           <h3 class="text-lg font-medium text-gray-200 capitalize">{{ currentPhotoType }} Photo</h3>
-          <button
-            v-if="step > 1"
-            @click="prevStep"
-            class="text-gray-400 hover:text-gray-200 text-xs"
-          >
-            ← Back
-          </button>
+          <div class="flex items-center gap-3">
+            <button
+              v-if="step > 1"
+              @click="prevStep"
+              class="text-gray-400 hover:text-gray-200 text-xs"
+            >
+              ← Back
+            </button>
+            <button
+              @click="restartCurrent"
+              class="text-gray-500 hover:text-red-400 text-xs"
+            >
+              Start Over
+            </button>
+          </div>
         </div>
         <p class="text-gray-400 text-sm mb-6">{{ photoInstructions[currentPhotoType] }}</p>
 
@@ -454,6 +601,7 @@ onUnmounted(() => {
           <!-- File Input -->
           <div class="mb-6">
             <input
+              ref="fileInputRef"
               :key="`${step}-${isRedoing}`"
               type="file"
               accept="image/*"
@@ -490,8 +638,7 @@ onUnmounted(() => {
               v-if="validationResult.approved"
               class="bg-green-900/30 border border-green-700 rounded px-4 py-3"
             >
-              <p class="text-green-400 text-sm font-medium mb-1">✓ Photo Approved</p>
-              <p class="text-gray-400 text-xs">{{ validationResult.quality_notes }}</p>
+              <p class="text-green-400 text-sm font-medium">✓ Photo Approved</p>
             </div>
 
             <div
@@ -508,17 +655,9 @@ onUnmounted(() => {
               </button>
             </div>
           </div>
-
-          <!-- Continue Button -->
-          <button
-            v-if="validationResult?.approved"
-            @click="nextStep"
-            class="w-full mt-4 py-2 bg-green-600 hover:bg-green-500 text-white text-sm rounded transition-colors"
-          >
-            Continue to {{ step === 3 ? 'Certificate' : photoTypes[step] }} →
-          </button>
         </div>
       </div>
+      </template>
 
       <!-- Certificate Step (4) -->
       <div v-if="step === 4" class="bg-gray-800 rounded-lg p-6">
@@ -592,6 +731,8 @@ onUnmounted(() => {
           </a>
         </div>
       </div>
+      </div>
+      </main>
     </div>
   </div>
 </template>
