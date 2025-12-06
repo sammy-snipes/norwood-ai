@@ -215,6 +215,12 @@ def get_task_status(
             else:
                 response.status = "failed"
                 response.error = result.get("error", "Unknown error")
+                # Still include message data for counseling failures so UI can update
+                if "message" in result:
+                    response.result = CounselingTaskResponse(
+                        success=False,
+                        message=CounselingMessageResult(**result["message"]),
+                    )
         else:
             response.status = "failed"
             response.error = str(task_result.info)
