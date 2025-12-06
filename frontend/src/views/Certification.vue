@@ -171,7 +171,7 @@ const uploadPhoto = async () => {
       // Register task with global store (context: 'cert-photo')
       const photoType = currentPhotoType.value
       const currentStepVal = step.value
-      taskStore.addTask(data.task_id, 'cert-photo', async () => {
+      taskStore.addTask(data.task_id, 'cert-photo', { photoType, step: currentStepVal }, async () => {
         await handlePhotoValidationComplete(photoType, currentStepVal)
       })
     } else {
@@ -280,7 +280,7 @@ const generateCertificate = async () => {
     if (res.ok) {
       const data = await res.json()
       // Register task with global store (context: 'cert-diagnosis')
-      taskStore.addTask(data.task_id, 'cert-diagnosis', async () => {
+      taskStore.addTask(data.task_id, 'cert-diagnosis', {}, async () => {
         await handleDiagnosisComplete()
       })
     } else {

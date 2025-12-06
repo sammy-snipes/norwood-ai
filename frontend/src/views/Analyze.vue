@@ -226,7 +226,7 @@ const analyze = async () => {
 
     taskStatus.value = 'processing'
     // Register task with global store (context: 'analyze')
-    taskStore.addTask(data.task_id, 'analyze', handleAnalysisComplete)
+    taskStore.addTask(data.task_id, 'analyze', {}, handleAnalysisComplete)
   } catch (err) {
     console.error('Analysis error:', err)
     error.value = err.message || 'Failed to connect to server'

@@ -49,6 +49,7 @@ class SendMessageRequest(BaseModel):
 class SendMessageResponse(BaseModel):
     user_message: MessageResponse
     assistant_message: MessageResponse
+    task_id: str
 
 
 class MessageStatusResponse(BaseModel):
@@ -155,6 +156,9 @@ def get_session(
     if not session:
         raise HTTPException(status_code=404, detail="Session not found")
 
+    # Sort messages by created_at, then by id (ULID) to ensure consistent ordering
+    sorted_messages = sorted(session.messages, key=lambda m: (m.created_at, m.id))
+
     return SessionDetailResponse(
         id=session.id,
         title=session.title,
@@ -167,7 +171,7 @@ def get_session(
                 status=m.status,
                 created_at=m.created_at,
             )
-            for m in session.messages
+            for m in sorted_messages
         ],
     )
 
@@ -189,7 +193,7 @@ def send_message(
     if not session:
         raise HTTPException(status_code=404, detail="Session not found")
 
-    # Save user message (completed immediately)
+    # Save user message (completed immediately) and commit
     user_msg = CounselingMessage(
         session_id=session.id,
         role=MessageRole.user,
@@ -197,17 +201,6 @@ def send_message(
         status=MessageStatus.completed,
     )
     db.add(user_msg)
-    db.flush()  # Get the ID
-
-    # Create pending assistant message
-    assistant_msg = CounselingMessage(
-        session_id=session.id,
-        role=MessageRole.assistant,
-        content=None,
-        status=MessageStatus.pending,
-    )
-    db.add(assistant_msg)
-    db.flush()
 
     # Auto-generate title from first message if not set
     if not session.title:
@@ -216,10 +209,20 @@ def send_message(
 
     db.commit()
     db.refresh(user_msg)
+
+    # Create pending assistant message (separate transaction for different timestamp)
+    assistant_msg = CounselingMessage(
+        session_id=session.id,
+        role=MessageRole.assistant,
+        content=None,
+        status=MessageStatus.pending,
+    )
+    db.add(assistant_msg)
+    db.commit()
     db.refresh(assistant_msg)
 
     # Queue the Celery task
-    generate_counseling_response_task.delay(
+    task = generate_counseling_response_task.delay(
         message_id=assistant_msg.id,
         session_id=session.id,
         user_id=user.id,
@@ -240,6 +243,7 @@ def send_message(
             status=assistant_msg.status,
             created_at=assistant_msg.created_at,
         ),
+        task_id=task.id,
     )
 
 

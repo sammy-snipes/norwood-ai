@@ -1,7 +1,7 @@
 <script setup>
 import { ref, computed, onMounted, nextTick } from 'vue'
 import { useAuthStore } from '../stores/auth'
-import { useCounselingStore } from '../stores/counseling'
+import { useTaskStore } from '../stores/tasks'
 import AppHeader from '../components/AppHeader.vue'
 import HistorySidebar from '../components/HistorySidebar.vue'
 import { marked } from 'marked'
@@ -13,7 +13,7 @@ marked.setOptions({
 })
 
 const authStore = useAuthStore()
-const counselingStore = useCounselingStore()
+const taskStore = useTaskStore()
 
 const renderMarkdown = (content) => {
   return marked.parse(content || '')
@@ -32,7 +32,8 @@ const isPremium = computed(() => authStore.user?.is_premium || authStore.user?.i
 
 // Check if the current active session has any pending messages
 const sending = computed(() => {
-  return counselingStore.hasPendingMessages(activeSession.value)
+  const tasks = taskStore.getTasksForContext('counseling')
+  return tasks.some(t => t.metadata.sessionId === activeSession.value)
 })
 
 const fetchSessions = async () => {
@@ -64,7 +65,11 @@ const createSession = async () => {
   }
 }
 
-const handleMessageComplete = async ({ messageId, sessionId, status, content }) => {
+const handleMessageComplete = async ({ success, result }) => {
+  if (!result?.message) return
+
+  const { id: messageId, session_id: sessionId, content, status } = result.message
+
   // Only update UI if still on the same session
   if (activeSession.value !== sessionId) return
 
@@ -86,7 +91,7 @@ const handleMessageComplete = async ({ messageId, sessionId, status, content }) 
 
 const selectSession = async (sessionId) => {
   activeSession.value = sessionId
-  counselingStore.lastActiveSessionId = sessionId
+  taskStore.setLastActive('counseling', sessionId)
   loading.value = true
   try {
     const res = await fetch(`${API_URL}/api/counseling/sessions/${sessionId}`, {
@@ -96,18 +101,8 @@ const selectSession = async (sessionId) => {
       const data = await res.json()
       messages.value = data.messages
 
-      // Check for any pending/processing messages and register them with the store
-      for (const msg of data.messages) {
-        if (msg.status === 'pending' || msg.status === 'processing') {
-          // Only add if not already tracked
-          if (!counselingStore.pendingMessages[msg.id]) {
-            counselingStore.addPendingMessage(msg.id, sessionId, handleMessageComplete)
-          }
-        }
-      }
-
-      // Update callbacks for any existing pending messages in this session
-      counselingStore.updateCallbacks(sessionId, handleMessageComplete)
+      // Update callbacks for any existing pending tasks in this session
+      taskStore.updateCallback('counseling', handleMessageComplete)
 
       await nextTick()
       scrollToBottom()
@@ -144,11 +139,12 @@ const sendMessage = async () => {
         messages.value.push(data.assistant_message)
       }
 
-      // Track the pending assistant message in the global store
-      if (data.assistant_message.status === 'pending' || data.assistant_message.status === 'processing') {
-        counselingStore.addPendingMessage(
-          data.assistant_message.id,
-          sessionId,
+      // Track the pending task with metadata
+      if (data.task_id) {
+        taskStore.addTask(
+          data.task_id,
+          'counseling',
+          { messageId: data.assistant_message.id, sessionId },
           handleMessageComplete
         )
       }
@@ -171,11 +167,6 @@ const deleteSession = async (sessionId) => {
     if (activeSession.value === sessionId) {
       activeSession.value = null
       messages.value = []
-      // Clear any pending messages for this session from the store
-      const pending = counselingStore.getPendingForSession(sessionId)
-      for (const msg of pending) {
-        counselingStore.removePendingMessage(msg.id)
-      }
     }
   } catch (err) {
     console.error('Failed to delete session:', err)
@@ -198,11 +189,11 @@ onMounted(async () => {
     await fetchSessions()
 
     // Restore last active session if we had one
-    if (counselingStore.lastActiveSessionId) {
-      // Verify the session still exists
-      const sessionExists = sessions.value.some(s => s.id === counselingStore.lastActiveSessionId)
+    const lastSessionId = taskStore.getLastActive('counseling')
+    if (lastSessionId) {
+      const sessionExists = sessions.value.some(s => s.id === lastSessionId)
       if (sessionExists) {
-        await selectSession(counselingStore.lastActiveSessionId)
+        await selectSession(lastSessionId)
       }
     }
   }

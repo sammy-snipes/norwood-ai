@@ -99,11 +99,28 @@ def generate_counseling_response_task(
             db.commit()
             logger.info(f"[{task_id}] Response generated successfully")
 
-            return {"success": True}
+            return {
+                "success": True,
+                "message": {
+                    "id": message_id,
+                    "session_id": session_id,
+                    "content": assistant_content,
+                    "status": "completed",
+                },
+            }
 
         except Exception as e:
             logger.error(f"[{task_id}] Counseling response failed: {e}", exc_info=True)
             assistant_msg.status = MessageStatus.failed
             assistant_msg.content = f"Error: {str(e)}"
             db.commit()
-            return {"success": False, "error": str(e)}
+            return {
+                "success": False,
+                "error": str(e),
+                "message": {
+                    "id": message_id,
+                    "session_id": session_id,
+                    "content": f"Error: {str(e)}",
+                    "status": "failed",
+                },
+            }

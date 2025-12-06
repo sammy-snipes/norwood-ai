@@ -57,13 +57,37 @@ class TaskResponse(BaseModel):
     status: str = Field(..., description="Initial task status")
 
 
+class CounselingMessageResult(BaseModel):
+    """Result from a counseling message task."""
+
+    id: str = Field(..., description="Message ID")
+    session_id: str = Field(..., description="Session ID")
+    content: str = Field(..., description="Message content")
+    status: str = Field(..., description="Message status")
+
+
+class CounselingTaskResponse(BaseModel):
+    """Task response for counseling messages."""
+
+    success: bool = Field(..., description="Whether the task succeeded")
+    message: CounselingMessageResult = Field(..., description="The completed message")
+
+
+class CertificationTaskResponse(BaseModel):
+    """Task response for certification tasks (photo validation, diagnosis)."""
+
+    success: bool = Field(..., description="Whether the task succeeded")
+
+
 class TaskStatusResponse(BaseModel):
     """Response when polling for task status."""
 
     task_id: str = Field(..., description="Task identifier")
     status: str = Field(..., description="Task status: pending, started, completed, failed")
     ready: bool = Field(..., description="Whether the task has completed")
-    result: AnalyzeResponse | None = Field(None, description="Analysis result if completed")
+    result: AnalyzeResponse | CounselingTaskResponse | CertificationTaskResponse | None = Field(
+        None, description="Task result if completed"
+    )
     error: str | None = Field(None, description="Error message if failed")
 
 

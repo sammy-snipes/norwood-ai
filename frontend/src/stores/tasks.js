@@ -1,5 +1,5 @@
 import { defineStore } from 'pinia'
-import { ref, computed } from 'vue'
+import { ref } from 'vue'
 import { useAuthStore } from './auth'
 
 const API_URL = import.meta.env.DEV ? 'http://localhost:8000' : ''
@@ -12,7 +12,9 @@ const API_URL = import.meta.env.DEV ? 'http://localhost:8000' : ''
  *
  * Usage:
  *   const taskStore = useTaskStore()
- *   taskStore.addTask(taskId, 'analyze', (result) => {
+ *
+ *   // Add a task with context and optional metadata
+ *   taskStore.addTask(taskId, 'analyze', { someData: 123 }, (result) => {
  *     // handle completion
  *   })
  *
@@ -20,18 +22,26 @@ const API_URL = import.meta.env.DEV ? 'http://localhost:8000' : ''
  *   if (taskStore.hasPendingTasks('analyze')) {
  *     isLoading.value = true
  *   }
+ *
+ *   // Get metadata for pending tasks
+ *   const tasks = taskStore.getTasksForContext('counseling')
+ *   // => [{ id, context, metadata, callback, addedAt }]
  */
 export const useTaskStore = defineStore('tasks', () => {
-  // Map of taskId -> { callback, addedAt, context }
+  // Map of taskId -> { callback, context, metadata, addedAt }
   const pendingTasks = ref({})
+
+  // Track last active session/item per context for restoring UI state
+  const lastActive = ref({})
 
   let pollInterval = null
   const POLL_INTERVAL_MS = 1500
 
-  function addTask(taskId, context, onComplete) {
+  function addTask(taskId, context, metadata, onComplete) {
     pendingTasks.value[taskId] = {
       callback: onComplete,
       context,
+      metadata: metadata || {},
       addedAt: Date.now()
     }
     startPolling()
@@ -56,6 +66,16 @@ export const useTaskStore = defineStore('tasks', () => {
         task.callback = newCallback
       }
     }
+  }
+
+  // Set last active item for a context (e.g., last selected session)
+  function setLastActive(context, value) {
+    lastActive.value[context] = value
+  }
+
+  // Get last active item for a context
+  function getLastActive(context) {
+    return lastActive.value[context]
   }
 
   function removeTask(taskId) {
@@ -99,17 +119,21 @@ export const useTaskStore = defineStore('tasks', () => {
 
         if (res.ok) {
           const data = await res.json()
+          console.log(`[TaskStore] Poll ${taskId}: ${data.status}`, data)
 
           if (data.status === 'completed' || data.status === 'failed') {
             // Task is done - call callback and remove
             const callback = task.callback
+            const metadata = task.metadata
+            console.log(`[TaskStore] Task ${taskId} done, calling callback`, { metadata, hasCallback: !!callback })
             removeTask(taskId)
 
             if (callback) {
               callback({
                 success: data.status === 'completed',
                 result: data.result,
-                error: data.error
+                error: data.error,
+                metadata
               })
             }
           }
@@ -124,15 +148,19 @@ export const useTaskStore = defineStore('tasks', () => {
   function cleanup() {
     stopPolling()
     pendingTasks.value = {}
+    lastActive.value = {}
   }
 
   return {
     pendingTasks,
+    lastActive,
     addTask,
     removeTask,
     hasPendingTasks,
     getTasksForContext,
     updateCallback,
+    setLastActive,
+    getLastActive,
     cleanup
   }
 })
