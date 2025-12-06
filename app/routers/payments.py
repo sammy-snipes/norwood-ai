@@ -54,6 +54,66 @@ def create_checkout_session(
             detail="User is already premium",
         )
 
+    # CRITICAL: Check if user has a successful payment that wasn't processed yet
+    # This prevents duplicate charges if:
+    # - Service was down when payment succeeded
+    # - User tries again after idempotency key expired (>24h)
+    # - Webhook failed but payment succeeded
+
+    # First check database
+    existing_payment = (
+        db.query(Payment)
+        .filter(
+            Payment.user_id == current_user.id,
+            Payment.status == "succeeded",
+        )
+        .first()
+    )
+
+    # Also check Stripe directly (in case payment succeeded but wasn't recorded)
+    try:
+        sessions = stripe.checkout.Session.list(
+            customer_details={"email": current_user.email},
+            limit=5,
+        )
+
+        for session in sessions.data:
+            if (
+                session.status == "complete"
+                and session.payment_status == "paid"
+                and session.metadata.get("user_id") == str(current_user.id)
+            ):
+                # Found successful payment on Stripe
+                if not current_user.is_premium:
+                    current_user.is_premium = True
+                    db.commit()
+                    logger.info(
+                        f"Found successful payment on Stripe for user {current_user.id}, upgraded to premium"
+                    )
+
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail="You already have a successful payment. Premium status has been updated.",
+                )
+
+    except stripe.error.StripeError as e:
+        logger.warning(f"Could not check Stripe for existing payments: {e}")
+        # Continue anyway - if Stripe is down, still allow creating checkout
+
+    if existing_payment:
+        # User already paid but isn't premium yet - upgrade them now
+        if not current_user.is_premium:
+            current_user.is_premium = True
+            db.commit()
+            logger.info(
+                f"Found existing successful payment in DB for user {current_user.id}, upgraded to premium"
+            )
+
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="You already have a successful payment. Premium status has been updated.",
+        )
+
     # Validate Stripe configuration
     if not settings.STRIPE_SECRET_KEY:
         raise HTTPException(
@@ -68,6 +128,11 @@ def create_checkout_session(
         )
 
     try:
+        # Use idempotency key to prevent duplicate charges
+        # Format: user_{user_id}_premium - unique per user for premium upgrade
+        # Stripe caches responses for 24 hours with the same key
+        idempotency_key = f"user_{current_user.id}_premium_upgrade"
+
         # Create Stripe Checkout Session
         checkout_session = stripe.checkout.Session.create(
             payment_method_types=["card"],
@@ -84,6 +149,7 @@ def create_checkout_session(
             metadata={
                 "user_id": current_user.id,
             },
+            idempotency_key=idempotency_key,
         )
 
         logger.info(f"Created checkout session for user {current_user.id}: {checkout_session.id}")
@@ -206,6 +272,185 @@ async def handle_checkout_completed(session: dict, db: Session):
         db.rollback()
         logger.error(f"Error processing payment for user {user_id}: {e}")
         raise
+
+
+@router.post("/verify-payment")
+async def verify_payment(
+    authorization: Optional[str] = Header(None),
+    db: Session = Depends(get_db),
+):
+    """
+    Verify payment completion after Stripe checkout redirect.
+
+    This endpoint is called by the success page to verify the payment actually
+    succeeded on Stripe's side and upgrade the user to premium if needed.
+
+    This is the PRIMARY mechanism for granting premium status - webhooks are backup.
+    """
+    # Authenticate user
+    if not authorization or not authorization.startswith("Bearer "):
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Not authenticated",
+        )
+
+    token = authorization.replace("Bearer ", "")
+    current_user = get_current_user(db, token)
+
+    if not current_user:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Invalid token",
+        )
+
+    # If already premium, nothing to do
+    if current_user.is_premium:
+        logger.info(f"User {current_user.id} already premium, skipping verification")
+        return {"status": "already_premium", "is_premium": True}
+
+    try:
+        # Search Stripe for successful payments for this customer
+        # We search by email since that's what we pass to Stripe
+        sessions = stripe.checkout.Session.list(
+            customer_details={"email": current_user.email},
+            limit=10,
+        )
+
+        # Find a completed session with our user_id in metadata
+        for session in sessions.data:
+            if (
+                session.status == "complete"
+                and session.payment_status == "paid"
+                and session.metadata.get("user_id") == str(current_user.id)
+            ):
+                # Found a successful payment! Process it
+                payment_intent_id = session.payment_intent
+
+                # Check if already processed (idempotency)
+                existing_payment = (
+                    db.query(Payment)
+                    .filter(Payment.stripe_payment_id == payment_intent_id)
+                    .first()
+                )
+
+                if not existing_payment:
+                    # Create payment record
+                    payment = Payment(
+                        user_id=current_user.id,
+                        stripe_payment_id=payment_intent_id,
+                        amount_cents=session.amount_total,  # Use actual amount from Stripe
+                        status="succeeded",
+                    )
+                    db.add(payment)
+
+                    # Mark user as premium
+                    current_user.is_premium = True
+                    db.commit()
+
+                    logger.info(
+                        f"Successfully verified and processed payment for user {current_user.id}: {payment_intent_id}"
+                    )
+                    return {"status": "verified_and_upgraded", "is_premium": True}
+                else:
+                    # Payment already recorded, just upgrade user if needed
+                    if not current_user.is_premium:
+                        current_user.is_premium = True
+                        db.commit()
+                        logger.info(f"Upgraded user {current_user.id} to premium (payment already recorded)")
+                        return {"status": "upgraded", "is_premium": True}
+                    else:
+                        return {"status": "already_processed", "is_premium": True}
+
+        # No successful payment found
+        logger.warning(f"No successful payment found for user {current_user.id}")
+        return {"status": "no_payment_found", "is_premium": False}
+
+    except stripe.error.StripeError as e:
+        logger.error(f"Stripe error verifying payment for user {current_user.id}: {e}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to verify payment: {str(e)}",
+        )
+
+
+@router.post("/refund/{payment_intent_id}")
+async def refund_payment(
+    payment_intent_id: str,
+    authorization: Optional[str] = Header(None),
+    db: Session = Depends(get_db),
+):
+    """
+    Refund a payment by payment_intent_id.
+
+    Only admins or the payment owner can refund.
+    Useful for refunding duplicate charges.
+    """
+    # Authenticate user
+    if not authorization or not authorization.startswith("Bearer "):
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Not authenticated",
+        )
+
+    token = authorization.replace("Bearer ", "")
+    current_user = get_current_user(db, token)
+
+    if not current_user:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Invalid token",
+        )
+
+    # Get payment record
+    payment = (
+        db.query(Payment)
+        .filter(Payment.stripe_payment_id == payment_intent_id)
+        .first()
+    )
+
+    if not payment:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Payment not found",
+        )
+
+    # Check authorization (must be admin or payment owner)
+    if not current_user.is_admin and payment.user_id != current_user.id:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Not authorized to refund this payment",
+        )
+
+    # Check if already refunded
+    if payment.status == "refunded":
+        return {"status": "already_refunded", "payment_id": payment_intent_id}
+
+    try:
+        # Refund via Stripe
+        refund = stripe.Refund.create(
+            payment_intent=payment_intent_id,
+            reason="duplicate",
+        )
+
+        # Update payment record
+        payment.status = "refunded"
+        db.commit()
+
+        logger.info(f"Refunded payment {payment_intent_id} for user {payment.user_id}")
+
+        return {
+            "status": "refunded",
+            "payment_id": payment_intent_id,
+            "refund_id": refund.id,
+            "amount_cents": payment.amount_cents,
+        }
+
+    except stripe.error.StripeError as e:
+        logger.error(f"Stripe error refunding payment {payment_intent_id}: {e}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to refund payment: {str(e)}",
+        )
 
 
 @router.get("/status", response_model=PaymentStatusResponse)

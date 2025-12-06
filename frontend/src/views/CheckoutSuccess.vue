@@ -1,14 +1,43 @@
 <script setup>
-import { onMounted } from 'vue'
+import { onMounted, ref } from 'vue'
 import { useRouter } from 'vue-router'
 import { useAuthStore } from '../stores/auth'
 
 const router = useRouter()
 const authStore = useAuthStore()
+const verifying = ref(true)
+const verificationStatus = ref('Verifying your payment...')
 
 onMounted(async () => {
-  // Refresh user data to get updated premium status
-  await authStore.fetchUser()
+  try {
+    // CRITICAL: Verify payment with Stripe before trusting webhook
+    // This ensures we grant premium even if webhook fails
+    const response = await fetch('/api/payments/verify-payment', {
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${authStore.token}`,
+      },
+    })
+
+    const result = await response.json()
+
+    if (result.is_premium) {
+      verificationStatus.value = 'Payment verified! Welcome to Premium!'
+      // Refresh user data to update UI
+      await authStore.fetchUser()
+    } else {
+      verificationStatus.value = 'Payment verification in progress...'
+      // Retry after a short delay (payment might still be processing)
+      setTimeout(async () => {
+        await authStore.fetchUser()
+      }, 2000)
+    }
+  } catch (error) {
+    console.error('Error verifying payment:', error)
+    verificationStatus.value = 'Verification error - please refresh the page'
+  } finally {
+    verifying.value = false
+  }
 
   // Redirect to settings after 3 seconds
   setTimeout(() => {
@@ -25,13 +54,19 @@ onMounted(async () => {
       <h1 class="text-4xl font-black mb-4">Welcome to Premium!</h1>
 
       <div class="p-6 bg-gray-800/50 rounded-lg border border-gray-700 space-y-4">
-        <p class="text-gray-300 leading-relaxed">
-          Congratulations. You've just paid $5 to unlock unlimited analyses of your receding hairline.
-        </p>
+        <div v-if="verifying" class="text-yellow-400 animate-pulse">
+          {{ verificationStatus }}
+        </div>
 
-        <p class="text-gray-400 text-sm">
-          Some might question this decision. We won't. Your money is in our account now.
-        </p>
+        <template v-else>
+          <p class="text-gray-300 leading-relaxed">
+            Congratulations. You've just paid $5 to unlock unlimited analyses of your receding hairline.
+          </p>
+
+          <p class="text-gray-400 text-sm">
+            Some might question this decision. We won't. Your money is in our account now.
+          </p>
+        </template>
 
         <div class="pt-4 border-t border-gray-700">
           <p class="text-yellow-400 font-bold mb-2">Premium Benefits Unlocked:</p>
