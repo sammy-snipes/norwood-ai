@@ -14,7 +14,13 @@ from app.celery_worker import celery_app
 from app.config import get_settings
 from app.db import get_db
 from app.models import Analysis, User
-from app.routers import auth_router, certification_router, cock_router, counseling_router, leaderboard_router
+from app.routers import (
+    auth_router,
+    certification_router,
+    cock_router,
+    counseling_router,
+    leaderboard_router,
+)
 from app.routers.payments import router as payments_router
 from app.schemas import (
     AnalysisHistoryItem,

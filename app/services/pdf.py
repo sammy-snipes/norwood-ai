@@ -389,7 +389,9 @@ def generate_cock_certification_pdf(
     # "has been officially classified as"
     c.setFont("Times-Roman", 12)
     c.setFillColor(DARK_GRAY)
-    c.drawCentredString(width / 2, height - 4.1 * inch, "has been officially measured and classified in")
+    c.drawCentredString(
+        width / 2, height - 4.1 * inch, "has been officially measured and classified in"
+    )
 
     # Pleasure Zone (big)
     c.setFont("Times-Bold", 36)
@@ -419,7 +421,9 @@ def generate_cock_certification_pdf(
     confidence_pct = int(confidence * 100)
     c.setFont("Times-Italic", 10)
     c.setFillColor(DARK_GRAY)
-    c.drawCentredString(width / 2, height - 6.1 * inch, f"Measurement Confidence: {confidence_pct}%")
+    c.drawCentredString(
+        width / 2, height - 6.1 * inch, f"Measurement Confidence: {confidence_pct}%"
+    )
 
     # Description box
     c.setStrokeColor(GOLD)

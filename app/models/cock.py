@@ -5,7 +5,6 @@ import enum
 from sqlalchemy import Column, DateTime, Float, ForeignKey, String, Text
 from sqlalchemy import Enum as SAEnum
 from sqlalchemy.orm import relationship
-from sqlalchemy.sql import func
 from ulid import ULID
 
 from app.models.base import Base, TimestampMixin

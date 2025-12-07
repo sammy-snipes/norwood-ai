@@ -7,7 +7,15 @@ from pydantic import BaseModel
 from sqlalchemy.orm import Session
 
 from app.db import get_db
-from app.models import Analysis, Certification, CertificationStatus, CockCertification, CockCertificationStatus, CounselingSession, User
+from app.models import (
+    Analysis,
+    Certification,
+    CertificationStatus,
+    CockCertification,
+    CockCertificationStatus,
+    CounselingSession,
+    User,
+)
 from app.routers.auth import decode_token
 
 router = APIRouter(prefix="/api/leaderboard", tags=["leaderboard"])
@@ -222,7 +230,13 @@ def get_leaderboard(
 
     # Cock rankings
     # Pleasure zone ranking (A > B > C > D > E)
-    pleasure_zone_order = {"ideal": 0, "very_satisfying": 1, "satisfying": 2, "enjoyable": 3, "not_satisfying": 4}
+    pleasure_zone_order = {
+        "ideal": 0,
+        "very_satisfying": 1,
+        "satisfying": 2,
+        "enjoyable": 3,
+        "not_satisfying": 4,
+    }
 
     cock_certs = (
         db.query(CockCertification)
@@ -237,7 +251,9 @@ def get_leaderboard(
     # Best pleasure zones
     pleasure_sorted = sorted(
         visible_cock_certs,
-        key=lambda c: pleasure_zone_order.get(c.pleasure_zone.value if c.pleasure_zone else "not_satisfying", 5)
+        key=lambda c: pleasure_zone_order.get(
+            c.pleasure_zone.value if c.pleasure_zone else "not_satisfying", 5
+        ),
     )[:5]
 
     cock_pleasure = [
@@ -254,7 +270,7 @@ def get_leaderboard(
     size_sorted = sorted(
         visible_cock_certs,
         key=lambda c: (c.length_inches or 0) * ((c.girth_inches or 0) ** 2),
-        reverse=True
+        reverse=True,
     )[:5]
 
     cock_size = [

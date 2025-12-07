@@ -40,9 +40,7 @@ def analyze_cock_task(
 
     with get_db_context() as db:
         certification = (
-            db.query(CockCertification)
-            .filter(CockCertification.id == certification_id)
-            .first()
+            db.query(CockCertification).filter(CockCertification.id == certification_id).first()
         )
 
         if not certification:
@@ -66,7 +64,7 @@ def analyze_cock_task(
             )
 
             logger.info(
-                f"[{task_id}] Analysis: {result.length_inches}\" x {result.girth_inches}\", confidence={result.confidence}"
+                f'[{task_id}] Analysis: {result.length_inches}" x {result.girth_inches}", confidence={result.confidence}'
             )
 
             # Calculate categories
