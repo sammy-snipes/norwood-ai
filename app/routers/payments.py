@@ -4,9 +4,8 @@ import logging
 
 import stripe
 from fastapi import APIRouter, Depends, Header, HTTPException, Request, status
-from sqlalchemy.orm import Session
-
 from pydantic import BaseModel, Field
+from sqlalchemy.orm import Session
 
 from app.config import get_settings
 from app.db import get_db
@@ -19,6 +18,7 @@ class DonationRequest(BaseModel):
     """Request body for creating a donation checkout."""
 
     amount_dollars: int = Field(..., ge=1, le=1000, description="Donation amount in dollars")
+
 
 router = APIRouter(prefix="/api/payments", tags=["payments"])
 settings = get_settings()
@@ -355,7 +355,9 @@ async def handle_checkout_completed(session: dict, db: Session):
         # Commit transaction
         db.commit()
 
-        logger.info(f"Successfully processed {payment_type} payment for user {user_id}: {payment_intent_id}")
+        logger.info(
+            f"Successfully processed {payment_type} payment for user {user_id}: {payment_intent_id}"
+        )
 
     except Exception as e:
         db.rollback()
