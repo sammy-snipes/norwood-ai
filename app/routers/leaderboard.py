@@ -107,11 +107,13 @@ def get_leaderboard(
     for u in users_with_analyses:
         median = get_user_median_norwood(u.id, db)
         if median is not None:
-            user_medians.append({
-                "username": u.name or "Anonymous",
-                "avatar_url": u.avatar_url,
-                "median": median,
-            })
+            user_medians.append(
+                {
+                    "username": u.name or "Anonymous",
+                    "avatar_url": u.avatar_url,
+                    "median": median,
+                }
+            )
 
     # Best Norwood: lowest median (round for display)
     best_sorted = sorted(user_medians, key=lambda x: x["median"])[:5]
