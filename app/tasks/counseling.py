@@ -2,6 +2,7 @@
 
 import logging
 
+from app.assets import get_norwood_chart
 from app.celery_worker import celery_app
 from app.db import get_db_context
 from app.llm import execute_text_task_plain
@@ -77,10 +78,15 @@ def generate_counseling_response_task(
         system_prompt = build_counseling_prompt(user_analyses)
 
         try:
+            # Include norwood chart as context for first message of session
+            is_first_message = len(messages) <= 1
+            context_images = [get_norwood_chart()] if is_first_message else None
+
             # Execute LLM task
             assistant_content = execute_text_task_plain(
                 messages=messages,
                 system_prompt=system_prompt,
+                context_images=context_images,
             )
 
             # Update the message

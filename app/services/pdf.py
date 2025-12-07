@@ -52,9 +52,9 @@ def generate_certification_pdf(
     _draw_border(c, width, height)
 
     # Header
-    c.setFont("Times-Bold", 28)
+    c.setFont("Times-Bold", 22)
     c.setFillColor(NAVY)
-    c.drawCentredString(width / 2, height - 1.5 * inch, "CERTIFICATE OF NORWOOD CLASSIFICATION")
+    c.drawCentredString(width / 2, height - 1.3 * inch, "CERTIFICATE OF NORWOOD CLASSIFICATION")
 
     # Subtitle
     c.setFont("Times-Italic", 14)
@@ -313,3 +313,194 @@ def _draw_wrapped_text(
 
     for i, line in enumerate(lines[:8]):  # Max 8 lines
         c.drawString(x, y - (i * line_height), line)
+
+
+def generate_cock_certification_pdf(
+    user_name: str,
+    length_inches: float,
+    girth_inches: float,
+    size_category: str,
+    pleasure_zone: str,
+    pleasure_zone_label: str,
+    description: str,
+    confidence: float,
+    certified_at: datetime,
+) -> bytes:
+    """
+    Generate cock certification PDF.
+
+    Args:
+        user_name: Name to appear on certificate
+        length_inches: Measured length
+        girth_inches: Measured girth
+        size_category: Size category (micro, below_average, etc.)
+        pleasure_zone: Pleasure zone (A-E)
+        pleasure_zone_label: Human readable pleasure zone label
+        description: Clinical description
+        confidence: Confidence score (0.0-1.0)
+        certified_at: Certification date
+
+    Returns:
+        PDF file as bytes
+    """
+    buffer = BytesIO()
+    c = canvas.Canvas(buffer, pagesize=letter)
+    width, height = letter
+
+    # Draw ornate border
+    _draw_border(c, width, height)
+
+    # Header
+    c.setFont("Times-Bold", 22)
+    c.setFillColor(NAVY)
+    c.drawCentredString(width / 2, height - 1.3 * inch, "CERTIFICATE OF COCK CLASSIFICATION")
+
+    # Subtitle
+    c.setFont("Times-Italic", 14)
+    c.setFillColor(DARK_GRAY)
+    c.drawCentredString(width / 2, height - 2 * inch, "Official Pleasure Zone Assessment")
+
+    # Decorative line
+    c.setStrokeColor(GOLD)
+    c.setLineWidth(2)
+    c.line(1.5 * inch, height - 2.3 * inch, width - 1.5 * inch, height - 2.3 * inch)
+
+    # "This certifies that"
+    c.setFont("Times-Roman", 12)
+    c.setFillColor(DARK_GRAY)
+    c.drawCentredString(width / 2, height - 3 * inch, "This is to certify that")
+
+    # Name
+    c.setFont("Times-Bold", 24)
+    c.setFillColor(NAVY)
+    c.drawCentredString(width / 2, height - 3.5 * inch, user_name)
+
+    # Decorative line under name
+    name_width = c.stringWidth(user_name, "Times-Bold", 24)
+    c.setStrokeColor(GOLD)
+    c.setLineWidth(1)
+    c.line(
+        (width - name_width) / 2 - 20,
+        height - 3.6 * inch,
+        (width + name_width) / 2 + 20,
+        height - 3.6 * inch,
+    )
+
+    # "has been officially classified as"
+    c.setFont("Times-Roman", 12)
+    c.setFillColor(DARK_GRAY)
+    c.drawCentredString(width / 2, height - 4.1 * inch, "has been officially measured and classified in")
+
+    # Pleasure Zone (big)
+    c.setFont("Times-Bold", 36)
+    c.setFillColor(NAVY)
+    c.drawCentredString(width / 2, height - 4.7 * inch, f"ZONE {pleasure_zone.upper()}")
+
+    # Pleasure zone label
+    c.setFont("Times-Italic", 16)
+    c.setFillColor(DARK_GRAY)
+    c.drawCentredString(width / 2, height - 5.1 * inch, f'"{pleasure_zone_label}"')
+
+    # Measurements box
+    c.setStrokeColor(GOLD)
+    c.setLineWidth(0.5)
+    c.rect(1.3 * inch, height - 6.3 * inch, width - 2.6 * inch, 0.9 * inch)
+
+    c.setFont("Times-Bold", 11)
+    c.setFillColor(NAVY)
+    measurements_y = height - 5.7 * inch
+    c.drawCentredString(
+        width / 2,
+        measurements_y,
+        f"Length: {length_inches:.1f}\"  |  Girth: {girth_inches:.1f}\"  |  Category: {size_category.replace('_', ' ').title()}",
+    )
+
+    # Confidence
+    confidence_pct = int(confidence * 100)
+    c.setFont("Times-Italic", 10)
+    c.setFillColor(DARK_GRAY)
+    c.drawCentredString(width / 2, height - 6.1 * inch, f"Measurement Confidence: {confidence_pct}%")
+
+    # Description box
+    c.setStrokeColor(GOLD)
+    c.setLineWidth(0.5)
+    c.rect(1 * inch, height - 8.3 * inch, width - 2 * inch, 1.7 * inch)
+
+    c.setFont("Times-Bold", 10)
+    c.setFillColor(NAVY)
+    c.drawString(1.2 * inch, height - 6.8 * inch, "CLINICAL ASSESSMENT")
+
+    # Wrap and draw description text
+    c.setFont("Times-Roman", 9)
+    c.setFillColor(DARK_GRAY)
+    _draw_wrapped_text(
+        c,
+        description,
+        1.2 * inch,
+        height - 7.1 * inch,
+        width - 2.4 * inch,
+        12,
+    )
+
+    # Date
+    date_str = certified_at.strftime("%B %d, %Y")
+    c.setFont("Times-Roman", 11)
+    c.drawCentredString(width / 2, height - 8.7 * inch, f"Certified on {date_str}")
+
+    # Signature section
+    sig_y = height - 9.7 * inch
+
+    # Signature line
+    c.setStrokeColor(DARK_GRAY)
+    c.setLineWidth(0.5)
+    c.line(1.5 * inch, sig_y, 3.5 * inch, sig_y)
+
+    # Signature image (if exists)
+    if os.path.exists(SIGNATURE_PATH):
+        try:
+            sig_img = ImageReader(SIGNATURE_PATH)
+            c.drawImage(
+                sig_img,
+                1.8 * inch,
+                sig_y + 0.1 * inch,
+                width=1.5 * inch,
+                height=0.5 * inch,
+                mask="auto",
+            )
+        except Exception:
+            pass
+
+    c.setFont("Times-Roman", 9)
+    c.drawString(1.5 * inch, sig_y - 0.25 * inch, "Chief Measurement Officer")
+    c.drawString(1.5 * inch, sig_y - 0.45 * inch, "Norwood AI")
+
+    # Seal
+    seal_x = width - 2.5 * inch
+    if os.path.exists(SEAL_PATH):
+        try:
+            seal_img = ImageReader(SEAL_PATH)
+            c.drawImage(
+                seal_img,
+                seal_x,
+                sig_y - 0.5 * inch,
+                width=1.2 * inch,
+                height=1.2 * inch,
+                mask="auto",
+            )
+        except Exception:
+            _draw_placeholder_seal(c, seal_x + 0.6 * inch, sig_y + 0.1 * inch)
+    else:
+        _draw_placeholder_seal(c, seal_x + 0.6 * inch, sig_y + 0.1 * inch)
+
+    # Footer
+    c.setFont("Times-Italic", 8)
+    c.setFillColor(DARK_GRAY)
+    c.drawCentredString(
+        width / 2,
+        0.5 * inch,
+        "This certificate is for educational and entertainment purposes only. Not a medical assessment.",
+    )
+
+    c.save()
+    buffer.seek(0)
+    return buffer.read()

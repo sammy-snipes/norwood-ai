@@ -142,3 +142,6 @@ class UserOptions(BaseModel):
     has_seen_donate: bool = Field(
         default=False, description="Whether user has seen the donate popup"
     )
+    show_on_leaderboard: bool = Field(
+        default=True, description="Whether user appears on public leaderboard"
+    )

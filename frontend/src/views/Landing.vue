@@ -1,32 +1,15 @@
 <script setup>
-import { ref, onMounted, onUnmounted } from 'vue'
+import { ref, computed } from 'vue'
 import { useAuthStore } from '../stores/auth'
 
 const authStore = useAuthStore()
 const activeTab = ref('home')
 
-const norwoodImages = [
-  '/img/stage_1.png',
-  '/img/stage_2.png',
-  '/img/stage_3.png',
-  '/img/stage_3v.png',
-  '/img/stage_4.png',
-  '/img/stage_5.png',
-  '/img/stage_6.png',
-  '/img/stage_7.png',
-]
-
-const currentFrame = ref(0)
-let animationInterval = null
-
-onMounted(() => {
-  animationInterval = setInterval(() => {
-    currentFrame.value = (currentFrame.value + 1) % norwoodImages.length
-  }, 1200)
-})
-
-onUnmounted(() => {
-  if (animationInterval) clearInterval(animationInterval)
+const daysSinceLaunch = computed(() => {
+  const launchDate = new Date('2025-12-05')
+  const today = new Date()
+  const diffTime = Math.abs(today - launchDate)
+  return Math.ceil(diffTime / (1000 * 60 * 60 * 24))
 })
 </script>
 
@@ -77,20 +60,6 @@ onUnmounted(() => {
     <main class="flex-1">
       <!-- HOME TAB -->
       <div v-if="activeTab === 'home'" class="flex flex-col items-center justify-center px-4 py-12 text-center">
-        <!-- Animated Norwood stages slideshow -->
-        <div class="mb-6">
-          <div class="w-20 h-20 relative">
-            <img
-              v-for="(img, i) in norwoodImages"
-              :key="i"
-              :src="img"
-              :class="['absolute inset-0 w-full h-full object-contain transition-opacity duration-300 invert', currentFrame === i ? 'opacity-100' : 'opacity-0']"
-              alt="Norwood scale"
-            />
-          </div>
-          <p class="text-gray-600 font-mono text-xs mt-2">{{ currentFrame + 1 }}/{{ norwoodImages.length }}</p>
-        </div>
-
         <p class="text-base text-gray-400 mb-3 max-w-lg leading-relaxed italic">
           "A hairline unexamined is not worth having."
         </p>
@@ -109,28 +78,22 @@ onUnmounted(() => {
           One free analysis. $5 for unlimited.
         </p>
 
-        <!-- Features -->
-        <div class="mt-12 grid md:grid-cols-3 gap-4 text-center max-w-3xl">
-          <div class="p-4 border border-gray-800 rounded-lg">
-            <div class="text-gray-600 font-mono text-xs mb-2">fig. 1</div>
-            <h3 class="font-medium text-sm mb-1">Precision</h3>
-            <p class="text-gray-500 text-xs">Norwood stages 1-7</p>
-          </div>
-          <div class="p-4 border border-gray-800 rounded-lg">
-            <div class="text-gray-600 font-mono text-xs mb-2">fig. 2</div>
-            <h3 class="font-medium text-sm mb-1">Analysis</h3>
-            <p class="text-gray-500 text-xs">AI-generated reflection</p>
-          </div>
-          <div class="p-4 border border-gray-800 rounded-lg">
-            <div class="text-gray-600 font-mono text-xs mb-2">fig. 3</div>
-            <h3 class="font-medium text-sm mb-1">Projections</h3>
-            <p class="text-gray-500 text-xs">Coming soon (Sage Mode)</p>
-          </div>
+        <!-- Philosophical excerpt -->
+        <div class="mt-12 max-w-md p-6 border border-gray-800 rounded-lg">
+          <p class="text-gray-400 text-sm leading-relaxed mb-4">
+            The scalp remembers what the mirror refuses to show. We do not heal wounds here—we
+            illuminate them. In naming the recession, we begin the quiet work of reconciliation.
+          </p>
+          <p class="text-gray-500 text-xs leading-relaxed">
+            Some seek treatment. Others seek understanding. We offer neither salvation nor cure,
+            only the peculiar comfort of precise measurement. To know the stage is to hold
+            impermanence in one's hands, briefly, before it too recedes.
+          </p>
         </div>
 
         <!-- Diagram -->
         <div class="mt-10 p-4 border border-gray-800 rounded-lg max-w-md w-full">
-          <p class="text-gray-600 font-mono text-xs mb-3">THE DIALECTIC</p>
+          <p class="text-gray-600 font-mono text-xs mb-3">THE NORWOOD-HEGELIAN DIALECTIC</p>
           <div class="flex items-center justify-between text-xs">
             <div class="text-center">
               <div class="text-gray-500">Thesis</div>
@@ -156,7 +119,7 @@ onUnmounted(() => {
 
         <div class="space-y-4 text-gray-400 text-sm leading-relaxed">
           <p>
-            Norwood AI emerged from the void in 2024. The Norwood scale is not merely a classification system,
+            Norwood AI emerged from the void <span class="font-bold text-gray-300">{{ daysSinceLaunch }}</span> days ago. The Norwood scale is not merely a classification system,
             but a <em>phenomenological framework</em> for understanding human impermanence.
           </p>
 
@@ -209,6 +172,13 @@ onUnmounted(() => {
               "My wife saw the analysis and agreed with it. She hasn't spoken to me in days."
             </p>
             <p class="text-gray-600 text-xs">— Anthony M., Stage 6</p>
+          </div>
+
+          <div class="p-3 bg-gray-800/50 rounded-lg">
+            <p class="text-gray-400 text-xs mb-2">
+              "I shared my cock certification on LinkedIn. HR called me within the hour. Worth it."
+            </p>
+            <p class="text-gray-600 text-xs">— Kevin L., Zone B</p>
           </div>
         </div>
 

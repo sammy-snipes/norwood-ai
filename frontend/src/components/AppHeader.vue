@@ -78,6 +78,14 @@ onUnmounted(() => {
             <span v-if="!hasUnlimited" class="text-[8px] text-purple-400 bg-purple-900/50 px-0.5 rounded leading-tight">sage</span>
           </router-link>
           <router-link
+            to="/cock-certification"
+            class="text-xs transition-colors flex items-center gap-1"
+            :class="$route.path === '/cock-certification' ? 'text-gray-400' : 'text-gray-500 hover:text-gray-300'"
+          >
+            Rate My Cock
+            <span v-if="!hasUnlimited" class="text-[8px] text-purple-400 bg-purple-900/50 px-0.5 rounded leading-tight">sage</span>
+          </router-link>
+          <router-link
             to="/leaderboard"
             class="text-xs transition-colors flex items-center gap-1"
             :class="$route.path === '/leaderboard' ? 'text-gray-400' : 'text-gray-500 hover:text-gray-300'"

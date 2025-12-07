@@ -20,6 +20,25 @@ const hasUnlimited = computed(() => {
   return authStore.user?.is_admin || authStore.user?.is_premium
 })
 
+const showOnLeaderboard = computed({
+  get: () => authStore.user?.options?.show_on_leaderboard ?? true,
+  set: async (value) => {
+    try {
+      await fetch(`${API_URL}/api/auth/leaderboard-visibility`, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${authStore.token}`,
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({ visible: value })
+      })
+      await authStore.fetchUser()
+    } catch (err) {
+      console.error('Failed to update leaderboard visibility:', err)
+    }
+  }
+})
+
 const handleLogout = () => {
   authStore.logout()
   router.push('/')
@@ -106,6 +125,18 @@ const upgradeToPremium = async () => {
           </div>
         </div>
 
+        <!-- Privacy Settings -->
+        <div class="p-4 bg-gray-800/50 rounded-lg">
+          <h3 class="text-xs font-medium mb-3 text-gray-400">Privacy</h3>
+          <label class="flex items-center gap-2 cursor-pointer">
+            <input
+              type="checkbox"
+              v-model="showOnLeaderboard"
+              class="w-3 h-3 accent-purple-500"
+            />
+            <span class="text-xs text-gray-400">Appear on leaderboard</span>
+          </label>
+        </div>
 
         <!-- The Criticism -->
         <div class="p-4 bg-gray-800/50 rounded-lg">

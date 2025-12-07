@@ -30,6 +30,7 @@ const toast = ref(null)
 // Donate toast
 const showDonateToast = ref(false)
 const showNorwoodCaptcha = ref(false)
+const showImageModal = ref(false)
 
 const handleDonateClose = async () => {
   showDonateToast.value = false
@@ -352,24 +353,45 @@ const formatDate = (dateStr) => {
         <!-- Upload Area -->
         <div
           v-else-if="!previewUrl && !result"
-          @drop.prevent="onDrop"
-          @dragover.prevent
-          class="border border-dashed border-gray-700 rounded-lg p-8 text-center hover:border-gray-600 transition-colors cursor-pointer"
-          @click="$refs.fileInput.click()"
+          class="space-y-6"
         >
-          <input
-            ref="fileInput"
-            type="file"
-            accept="image/*"
-            class="hidden"
-            @change="onFileSelect"
-          />
-          <div class="text-gray-500">
-            <svg class="w-8 h-8 mx-auto mb-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12" />
-            </svg>
-            <p class="text-sm">Drop image or click to upload</p>
-            <p class="text-xs mt-1 text-gray-600">JPEG, PNG, GIF, WebP</p>
+          <!-- Norwood Scale Explanation -->
+          <div class="p-4 bg-gray-800/50 rounded-lg">
+            <h3 class="text-sm font-medium text-gray-300 mb-2">The Norwood Scale</h3>
+            <p class="text-gray-500 text-xs mb-4">
+              The Norwood-Hamilton scale is the standard classification system for male pattern baldness.
+              It ranges from Stage 1 (no significant hair loss) to Stage 7 (extensive hair loss).
+              Upload a photo and we'll classify your current stage.
+            </p>
+            <img
+              src="/img/norwood.png"
+              alt="Norwood Scale"
+              class="rounded max-h-72 mx-auto cursor-pointer hover:opacity-80 transition-opacity"
+              @click="showImageModal = true"
+            />
+            <p class="text-gray-600 text-[10px] text-center mt-2">Click to enlarge</p>
+          </div>
+
+          <div
+            @drop.prevent="onDrop"
+            @dragover.prevent
+            class="border border-dashed border-gray-700 rounded-lg p-8 text-center hover:border-gray-600 transition-colors cursor-pointer"
+            @click="$refs.fileInput.click()"
+          >
+            <input
+              ref="fileInput"
+              type="file"
+              accept="image/*"
+              class="hidden"
+              @change="onFileSelect"
+            />
+            <div class="text-gray-500">
+              <svg class="w-8 h-8 mx-auto mb-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12" />
+              </svg>
+              <p class="text-sm">Drop image or click to upload</p>
+              <p class="text-xs mt-1 text-gray-600">JPEG, PNG, GIF, WebP</p>
+            </div>
           </div>
         </div>
 
@@ -473,6 +495,27 @@ const formatDate = (dateStr) => {
       v-if="showNorwoodCaptcha"
       @close="handleCaptchaComplete"
     />
+
+    <!-- Image Modal -->
+    <Teleport to="body">
+      <div
+        v-if="showImageModal"
+        class="fixed inset-0 bg-black/90 z-50 flex items-center justify-center p-4 cursor-pointer"
+        @click="showImageModal = false"
+      >
+        <img
+          src="/img/norwood.png"
+          alt="Norwood Scale"
+          class="max-w-full max-h-full object-contain"
+        />
+        <button
+          class="absolute top-4 right-4 text-white/70 hover:text-white text-2xl"
+          @click="showImageModal = false"
+        >
+          ✕
+        </button>
+      </div>
+    </Teleport>
   </div>
 </template>
 

@@ -7,7 +7,7 @@ from pydantic import BaseModel
 from sqlalchemy.orm import Session
 
 from app.db import get_db
-from app.models import Analysis, Certification, CertificationStatus, CounselingSession, User
+from app.models import Analysis, Certification, CertificationStatus, CockCertification, CockCertificationStatus, CounselingSession, User
 from app.routers.auth import decode_token
 
 router = APIRouter(prefix="/api/leaderboard", tags=["leaderboard"])
@@ -25,16 +25,34 @@ class InsecurityEntry(BaseModel):
     avatar_url: str | None = None
 
 
+class CockPleasureEntry(BaseModel):
+    username: str
+    pleasure_zone: str
+    pleasure_zone_label: str
+    avatar_url: str | None = None
+
+
+class CockSizeEntry(BaseModel):
+    username: str
+    length_inches: float
+    girth_inches: float
+    size_category: str
+    avatar_url: str | None = None
+
+
 class LeaderboardResponse(BaseModel):
     best_norwood: list[NorwoodEntry]
     worst_norwood: list[NorwoodEntry]
     insecurity_index: list[InsecurityEntry]
+    cock_pleasure: list[CockPleasureEntry]
+    cock_size: list[CockSizeEntry]
 
 
 # Insecurity scoring weights
 CERT_WEIGHT = 50
 ANALYSIS_WEIGHT = 10
 COUNSELING_WEIGHT = 5
+COCK_CERT_WEIGHT = 100  # Rating your cock is peak insecurity
 
 
 def require_premium(
@@ -86,6 +104,12 @@ def get_user_median_norwood(user_id: str, db: Session) -> float | None:
     return statistics.median([s[0] for s in stages])
 
 
+def user_visible_on_leaderboard(user: User) -> bool:
+    """Check if user has opted to appear on leaderboard (default True)."""
+    opts = user.options or {}
+    return opts.get("show_on_leaderboard", True)
+
+
 @router.get("", response_model=LeaderboardResponse)
 def get_leaderboard(
     user: User = Depends(require_premium),
@@ -102,9 +126,11 @@ def get_leaderboard(
         .all()
     )
 
-    # Calculate median for each user
+    # Calculate median for each user (only if they opted in)
     user_medians = []
     for u in users_with_analyses:
+        if not user_visible_on_leaderboard(u):
+            continue
         median = get_user_median_norwood(u.id, db)
         if median is not None:
             user_medians.append(
@@ -139,40 +165,54 @@ def get_leaderboard(
 
     # Insecurity Index: score based on total interactions
     # Get all users with their interaction counts
-    users = db.query(User).all()
+    all_users = db.query(User).all()
 
     insecurity_scores = []
-    for user in users:
+    for u in all_users:
+        if not user_visible_on_leaderboard(u):
+            continue
+
         # Count certifications
         cert_count = (
             db.query(Certification)
             .filter(
-                Certification.user_id == user.id,
+                Certification.user_id == u.id,
                 Certification.status == CertificationStatus.completed,
             )
             .count()
         )
 
         # Count analyses
-        analysis_count = db.query(Analysis).filter(Analysis.user_id == user.id).count()
+        analysis_count = db.query(Analysis).filter(Analysis.user_id == u.id).count()
 
         # Count counseling sessions
         counseling_count = (
-            db.query(CounselingSession).filter(CounselingSession.user_id == user.id).count()
+            db.query(CounselingSession).filter(CounselingSession.user_id == u.id).count()
+        )
+
+        # Count cock certifications
+        cock_cert_count = (
+            db.query(CockCertification)
+            .filter(
+                CockCertification.user_id == u.id,
+                CockCertification.status == CockCertificationStatus.completed,
+            )
+            .count()
         )
 
         score = (
             cert_count * CERT_WEIGHT
             + analysis_count * ANALYSIS_WEIGHT
             + counseling_count * COUNSELING_WEIGHT
+            + cock_cert_count * COCK_CERT_WEIGHT
         )
 
         if score > 0:
             insecurity_scores.append(
                 InsecurityEntry(
-                    username=user.name or "Anonymous",
+                    username=u.name or "Anonymous",
                     score=score,
-                    avatar_url=user.avatar_url,
+                    avatar_url=u.avatar_url,
                 )
             )
 
@@ -180,8 +220,58 @@ def get_leaderboard(
     insecurity_scores.sort(key=lambda x: x.score, reverse=True)
     insecurity_index = insecurity_scores[:10]
 
+    # Cock rankings
+    # Pleasure zone ranking (A > B > C > D > E)
+    pleasure_zone_order = {"ideal": 0, "very_satisfying": 1, "satisfying": 2, "enjoyable": 3, "not_satisfying": 4}
+
+    cock_certs = (
+        db.query(CockCertification)
+        .join(User, CockCertification.user_id == User.id)
+        .filter(CockCertification.status == CockCertificationStatus.completed)
+        .all()
+    )
+
+    # Filter by users who opted in
+    visible_cock_certs = [c for c in cock_certs if user_visible_on_leaderboard(c.user)]
+
+    # Best pleasure zones
+    pleasure_sorted = sorted(
+        visible_cock_certs,
+        key=lambda c: pleasure_zone_order.get(c.pleasure_zone.value if c.pleasure_zone else "not_satisfying", 5)
+    )[:5]
+
+    cock_pleasure = [
+        CockPleasureEntry(
+            username=c.user.name or "Anonymous",
+            pleasure_zone=c.pleasure_zone.name if c.pleasure_zone else "unknown",
+            pleasure_zone_label=c.pleasure_zone_label or "Unknown",
+            avatar_url=c.user.avatar_url,
+        )
+        for c in pleasure_sorted
+    ]
+
+    # Biggest cocks (by volume approximation: length * girth^2)
+    size_sorted = sorted(
+        visible_cock_certs,
+        key=lambda c: (c.length_inches or 0) * ((c.girth_inches or 0) ** 2),
+        reverse=True
+    )[:5]
+
+    cock_size = [
+        CockSizeEntry(
+            username=c.user.name or "Anonymous",
+            length_inches=c.length_inches or 0,
+            girth_inches=c.girth_inches or 0,
+            size_category=c.size_category.value if c.size_category else "unknown",
+            avatar_url=c.user.avatar_url,
+        )
+        for c in size_sorted
+    ]
+
     return LeaderboardResponse(
         best_norwood=best_norwood,
         worst_norwood=worst_norwood,
         insecurity_index=insecurity_index,
+        cock_pleasure=cock_pleasure,
+        cock_size=cock_size,
     )

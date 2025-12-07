@@ -6,6 +6,8 @@ import Analyze from '../views/Analyze.vue'
 import Counseling from '../views/Counseling.vue'
 import Certification from '../views/Certification.vue'
 import CertificatePublic from '../views/CertificatePublic.vue'
+import CockCertification from '../views/CockCertification.vue'
+import CockCertificatePublic from '../views/CockCertificatePublic.vue'
 import Leaderboard from '../views/Leaderboard.vue'
 import Settings from '../views/Settings.vue'
 import CheckoutSuccess from '../views/CheckoutSuccess.vue'
@@ -40,6 +42,18 @@ const routes = [
     path: '/cert/:id',
     name: 'certificate-public',
     component: CertificatePublic,
+    meta: { requiresAuth: false }
+  },
+  {
+    path: '/cock-certification',
+    name: 'cock-certification',
+    component: CockCertification,
+    meta: { requiresAuth: true }
+  },
+  {
+    path: '/cock/:id',
+    name: 'cock-certificate-public',
+    component: CockCertificatePublic,
     meta: { requiresAuth: false }
   },
   {

@@ -7,6 +7,15 @@ from app.models.certification import (
     PhotoType,
     ValidationStatus,
 )
+from app.models.cock import (
+    CockCertification,
+    CockCertificationStatus,
+    CockSizeCategory,
+    PleasureZone,
+    calculate_pleasure_zone,
+    calculate_size_category,
+    SIZE_CATEGORY_LABELS,
+)
 from app.models.counseling import CounselingMessage, CounselingSession
 from app.models.payment import Payment
 from app.models.user import User
@@ -24,4 +33,11 @@ __all__ = [
     "CertificationStatus",
     "PhotoType",
     "ValidationStatus",
+    "CockCertification",
+    "CockCertificationStatus",
+    "CockSizeCategory",
+    "PleasureZone",
+    "calculate_pleasure_zone",
+    "calculate_size_category",
+    "SIZE_CATEGORY_LABELS",
 ]

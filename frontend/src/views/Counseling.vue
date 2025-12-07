@@ -210,7 +210,8 @@ onMounted(async () => {
     <!-- Paywall -->
     <div v-if="!isPremium" class="flex items-center justify-center min-h-[calc(100vh-41px)]">
       <div class="text-center">
-        <p class="text-gray-400 text-sm mb-2">Counseling requires Sage Mode.</p>
+        <h2 class="text-lg font-medium text-gray-200 mb-2">Sage Mode Feature</h2>
+        <p class="text-gray-400 text-sm mb-4">Counseling requires Sage Mode.</p>
         <router-link to="/settings" class="text-purple-400 text-xs hover:underline">
           Enter Sage Mode
         </router-link>

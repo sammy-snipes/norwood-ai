@@ -30,6 +30,7 @@ GOOGLE_USERINFO_URL = "https://www.googleapis.com/oauth2/v2/userinfo"
 class UserOptionsResponse(BaseModel):
     completed_captcha: bool = False
     has_seen_donate: bool = False
+    show_on_leaderboard: bool = True
 
 
 class UserResponse(BaseModel):
@@ -313,6 +314,50 @@ def mark_donate_seen(
     # Update options
     options = user.options or {}
     options["has_seen_donate"] = True
+    user.options = options
+    flag_modified(user, "options")
+    db.commit()
+
+    return {"success": True}
+
+
+class LeaderboardVisibilityRequest(BaseModel):
+    visible: bool
+
+
+@router.post("/leaderboard-visibility")
+def set_leaderboard_visibility(
+    request: LeaderboardVisibilityRequest,
+    authorization: str | None = Header(None),
+    db: Session = Depends(get_db),
+):
+    """Set whether user appears on leaderboard."""
+    if not authorization or not authorization.startswith("Bearer "):
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Not authenticated",
+        )
+
+    token = authorization.replace("Bearer ", "")
+    user_id = decode_token(token)
+
+    if not user_id:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Invalid token",
+        )
+
+    user = db.query(User).filter(User.id == user_id).first()
+
+    if not user:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="User not found",
+        )
+
+    # Update options
+    options = user.options or {}
+    options["show_on_leaderboard"] = request.visible
     user.options = options
     flag_modified(user, "options")
     db.commit()

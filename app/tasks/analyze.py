@@ -2,6 +2,7 @@
 
 import logging
 
+from app.assets import get_norwood_chart
 from app.celery_worker import celery_app
 from app.config import get_settings
 from app.db import get_db_context
@@ -33,11 +34,13 @@ def analyze_image_task(self, image_base64: str, media_type: str, user_id: str) -
 
     try:
         # Execute LLM task with structured output
+        # Include norwood chart as reference, then the user's image
+        norwood_chart = get_norwood_chart()
         result = execute_vision_task(
-            images=[(image_base64, media_type)],
+            images=[norwood_chart, (image_base64, media_type)],
             system_prompt=NORWOOD_ANALYSIS_PROMPT,
             response_model=NorwoodAnalysisResult,
-            user_text="Analyze this image and classify the Norwood stage.",
+            user_text="The first image is the Norwood scale reference chart. The second image is the user's photo to analyze. Classify their Norwood stage.",
         )
 
         logger.info(f"[{task_id}] LLM returned stage {result.norwood_stage}")

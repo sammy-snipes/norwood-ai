@@ -3,6 +3,7 @@
 import logging
 from datetime import UTC, datetime
 
+from app.assets import get_norwood_chart
 from app.celery_worker import celery_app
 from app.db import get_db_context
 from app.llm import execute_vision_task
@@ -125,7 +126,7 @@ def generate_certification_diagnosis_task(self, certification_id: str) -> dict:
 
             # Fetch images from S3
             s3 = S3Service()
-            images = []
+            images = [get_norwood_chart()]  # Start with reference chart
             for photo_type in [PhotoType.front, PhotoType.left, PhotoType.right]:
                 photo = photos[photo_type]
                 image_data, img_content_type = s3.get_image_base64(photo.s3_key)
@@ -137,7 +138,7 @@ def generate_certification_diagnosis_task(self, certification_id: str) -> dict:
                 images=images,
                 system_prompt=CERTIFICATION_DIAGNOSIS_PROMPT,
                 response_model=CertificationDiagnosis,
-                user_text="The images are in order: FRONT, LEFT, RIGHT. Provide the official Norwood certification diagnosis.",
+                user_text="The first image is the Norwood scale reference chart. The following images are the user's photos in order: FRONT, LEFT, RIGHT. Provide the official Norwood certification diagnosis.",
             )
 
             logger.info(

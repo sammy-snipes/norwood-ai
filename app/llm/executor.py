@@ -142,6 +142,7 @@ def execute_text_task_plain(
     messages: list[dict],
     system_prompt: str,
     model: str = DEFAULT_MODEL,
+    context_images: list[tuple[str, str]] | None = None,
 ) -> str:
     """
     Send text conversation, return plain text response.
@@ -152,6 +153,7 @@ def execute_text_task_plain(
         messages: Conversation history
         system_prompt: System instructions for the model
         model: Model identifier to use
+        context_images: Optional list of (base64_data, media_type) to prepend as context
 
     Returns:
         Plain text response string
@@ -160,11 +162,39 @@ def execute_text_task_plain(
 
     logger.debug(f"Executing plain text task with model={model}")
 
+    # If context images provided, prepend as a user message
+    final_messages = []
+    if context_images:
+        content = []
+        for base64_data, media_type in context_images:
+            content.append(
+                {
+                    "type": "image",
+                    "source": {
+                        "type": "base64",
+                        "media_type": media_type,
+                        "data": base64_data,
+                    },
+                }
+            )
+        content.append(
+            {"type": "text", "text": "Here is the Norwood scale reference chart for context."}
+        )
+        final_messages.append({"role": "user", "content": content})
+        final_messages.append(
+            {
+                "role": "assistant",
+                "content": "Thank you for the reference chart. I'll use this to inform our conversation about hair loss.",
+            }
+        )
+
+    final_messages.extend(messages)
+
     response = client.messages.create(
         model=model,
         max_tokens=4096,
         system=system_prompt,
-        messages=messages,
+        messages=final_messages,
     )
 
     text_block = next(
