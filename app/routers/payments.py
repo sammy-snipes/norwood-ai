@@ -6,11 +6,19 @@ import stripe
 from fastapi import APIRouter, Depends, Header, HTTPException, Request, status
 from sqlalchemy.orm import Session
 
+from pydantic import BaseModel, Field
+
 from app.config import get_settings
 from app.db import get_db
 from app.models import Payment, User
 from app.routers.auth import get_current_user
 from app.schemas import CheckoutSessionResponse, PaymentRecord, PaymentStatusResponse
+
+
+class DonationRequest(BaseModel):
+    """Request body for creating a donation checkout."""
+
+    amount_dollars: int = Field(..., ge=1, le=1000, description="Donation amount in dollars")
 
 router = APIRouter(prefix="/api/payments", tags=["payments"])
 settings = get_settings()
@@ -163,6 +171,84 @@ def create_checkout_session(
         )
 
 
+@router.post("/create-donation", response_model=CheckoutSessionResponse)
+def create_donation_checkout(
+    donation: DonationRequest,
+    authorization: str | None = Header(None),
+    db: Session = Depends(get_db),
+):
+    """
+    Create a Stripe Checkout session for a donation.
+
+    Accepts a custom amount in dollars. Returns a checkout URL.
+    """
+    # Authenticate user (optional - could allow anonymous donations)
+    if not authorization or not authorization.startswith("Bearer "):
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Not authenticated",
+        )
+
+    token = authorization.replace("Bearer ", "")
+    current_user = get_current_user(db, token)
+
+    if not current_user:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Invalid token",
+        )
+
+    # Validate Stripe configuration
+    if not settings.STRIPE_SECRET_KEY:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Stripe is not configured",
+        )
+
+    amount_cents = donation.amount_dollars * 100
+
+    try:
+        # Create Stripe Checkout Session with custom amount
+        checkout_session = stripe.checkout.Session.create(
+            payment_method_types=["card"],
+            line_items=[
+                {
+                    "price_data": {
+                        "currency": "usd",
+                        "unit_amount": amount_cents,
+                        "product_data": {
+                            "name": "Donation to Norwood AI",
+                            "description": "Thank you for supporting the existential crisis.",
+                        },
+                    },
+                    "quantity": 1,
+                }
+            ],
+            mode="payment",
+            success_url=f"{settings.FRONTEND_URL}/donate/success",
+            cancel_url=f"{settings.FRONTEND_URL}/analyze",
+            customer_email=current_user.email,
+            metadata={
+                "user_id": current_user.id,
+                "type": "donation",
+                "amount_cents": amount_cents,
+            },
+        )
+
+        logger.info(
+            f"Created donation checkout for user {current_user.id}: ${donation.amount_dollars}"
+        )
+
+        return CheckoutSessionResponse(checkout_url=checkout_session.url)
+
+    except stripe.error.StripeError as e:
+        logger.error(f"Stripe error creating donation checkout: {e}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to create checkout session: {str(e)}",
+        )
+
+
 @router.post("/webhook", status_code=status.HTTP_200_OK)
 async def stripe_webhook(
     request: Request,
@@ -222,10 +308,14 @@ async def handle_checkout_completed(session: dict, db: Session):
     """
     Handle successful checkout completion.
 
-    Marks user as premium and creates payment record.
+    For premium: marks user as premium and creates payment record.
+    For donation: just creates payment record.
     """
-    user_id = session.get("metadata", {}).get("user_id")
+    metadata = session.get("metadata", {})
+    user_id = metadata.get("user_id")
+    payment_type = metadata.get("type", "premium")  # default to premium for backwards compat
     payment_intent_id = session.get("payment_intent")
+    amount_cents = session.get("amount_total", 0)
 
     if not user_id:
         logger.error(f"Missing user_id in checkout session metadata: {session.get('id')}")
@@ -252,18 +342,20 @@ async def handle_checkout_completed(session: dict, db: Session):
         payment = Payment(
             user_id=user_id,
             stripe_payment_id=payment_intent_id,
-            amount_cents=500,  # $5.00
+            amount_cents=amount_cents,
             status="succeeded",
+            type=payment_type,
         )
         db.add(payment)
 
-        # Mark user as premium
-        user.is_premium = True
+        # Only mark user as premium for premium purchases
+        if payment_type == "premium":
+            user.is_premium = True
 
         # Commit transaction
         db.commit()
 
-        logger.info(f"Successfully processed payment for user {user_id}: {payment_intent_id}")
+        logger.info(f"Successfully processed {payment_type} payment for user {user_id}: {payment_intent_id}")
 
     except Exception as e:
         db.rollback()
@@ -483,6 +575,7 @@ def get_payment_status(
                 stripe_payment_id=p.stripe_payment_id,
                 amount_cents=p.amount_cents,
                 status=p.status,
+                type=p.type,
                 created_at=p.created_at,
             )
             for p in payments

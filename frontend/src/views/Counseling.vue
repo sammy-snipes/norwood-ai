@@ -4,6 +4,7 @@ import { useAuthStore } from '../stores/auth'
 import { useTaskStore } from '../stores/tasks'
 import AppHeader from '../components/AppHeader.vue'
 import HistorySidebar from '../components/HistorySidebar.vue'
+import DonateToast from '../components/DonateToast.vue'
 import { marked } from 'marked'
 
 // Configure marked for safe rendering
@@ -29,6 +30,8 @@ const loading = ref(false)
 const messagesContainer = ref(null)
 
 const isPremium = computed(() => authStore.user?.is_premium || authStore.user?.is_admin)
+
+const showDonateToast = ref(false)
 
 // Check if the current active session has any pending messages
 const sending = computed(() => {
@@ -202,14 +205,14 @@ onMounted(async () => {
 
 <template>
   <div class="min-h-screen bg-gray-900 text-white">
-    <AppHeader />
+    <AppHeader @donate="showDonateToast = true" />
 
     <!-- Paywall -->
     <div v-if="!isPremium" class="flex items-center justify-center min-h-[calc(100vh-41px)]">
       <div class="text-center">
-        <p class="text-gray-400 text-sm mb-2">Counseling requires a premium subscription.</p>
+        <p class="text-gray-400 text-sm mb-2">Counseling requires Sage Mode.</p>
         <router-link to="/settings" class="text-purple-400 text-xs hover:underline">
-          Upgrade to Premium
+          Enter Sage Mode
         </router-link>
       </div>
     </div>
@@ -299,6 +302,12 @@ onMounted(async () => {
         </div>
       </main>
     </div>
+
+    <DonateToast
+      v-if="showDonateToast"
+      @close="showDonateToast = false"
+      @donate="showDonateToast = false"
+    />
   </div>
 </template>
 

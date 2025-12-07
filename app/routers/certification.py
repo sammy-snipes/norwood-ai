@@ -415,6 +415,31 @@ def get_certification_history(
     ]
 
 
+@router.get("/public/{cert_id}")
+def get_public_certification(
+    cert_id: str,
+    db: Session = Depends(get_db),
+):
+    """Get public certification info (no auth required)."""
+    certification = (
+        db.query(Certification)
+        .filter(
+            Certification.id == cert_id,
+            Certification.status == CertificationStatus.completed,
+        )
+        .first()
+    )
+
+    if not certification:
+        raise HTTPException(status_code=404, detail="Certification not found")
+
+    return {
+        "norwood_stage": certification.norwood_stage,
+        "norwood_variant": certification.norwood_variant,
+        "certified_at": certification.certified_at,
+    }
+
+
 @router.delete("/{cert_id}")
 def delete_certification(
     cert_id: str,

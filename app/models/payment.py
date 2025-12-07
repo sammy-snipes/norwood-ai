@@ -15,6 +15,7 @@ class Payment(Base):
     stripe_payment_id = Column(String(255), unique=True, nullable=False, index=True)
     amount_cents = Column(Integer, nullable=False)
     status = Column(String(20), nullable=False)  # pending, succeeded, failed
+    type = Column(String(20), nullable=False, default="premium")  # premium, donation
     created_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
 
     # Relationships

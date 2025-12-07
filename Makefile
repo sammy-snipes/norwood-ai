@@ -140,8 +140,16 @@ migrate:
 # ==============================================================================
 .PHONY: run-app
 run-app: build-frontend
-	@echo "Starting FastAPI backend with built frontend..."
+	@echo "Starting FastAPI backend with built frontend on port 8000..."
 	uv run uvicorn app.main:app --reload --host 0.0.0.0 --port 8000
+
+.PHONY: run-dev
+run-dev:
+	@echo "Starting frontend (5173) + backend (8000) with hot reload..."
+	@trap 'kill 0' EXIT; \
+	cd frontend && npm run dev & \
+	uv run uvicorn app.main:app --reload --host 0.0.0.0 --port 8000 & \
+	wait
 
 .PHONY: run-celery
 run-celery: ensure-redis

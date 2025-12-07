@@ -1,9 +1,11 @@
 @import "tailwindcss";
 
-body {
-  font-family: 'Libre Baskerville', Georgia, serif;
-  font-size: 13px;
-  line-height: 1.7;
+@layer base {
+  body {
+    font-family: 'IBM Plex Sans', -apple-system, BlinkMacSystemFont, sans-serif !important;
+    font-size: 13px;
+    line-height: 1.6;
+  }
 }
 
 /* Custom scrollbar */

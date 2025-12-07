@@ -105,6 +105,7 @@ class PaymentRecord(BaseModel):
     stripe_payment_id: str = Field(..., description="Stripe payment intent ID")
     amount_cents: int = Field(..., description="Amount paid in cents")
     status: str = Field(..., description="Payment status: pending, succeeded, failed")
+    type: str = Field(..., description="Payment type: premium, donation")
     created_at: datetime = Field(..., description="Payment creation timestamp")
 
     model_config = {"from_attributes": True}
@@ -137,4 +138,7 @@ class UserOptions(BaseModel):
 
     completed_captcha: bool = Field(
         default=False, description="Whether user has completed the donate captcha"
+    )
+    has_seen_donate: bool = Field(
+        default=False, description="Whether user has seen the donate popup"
     )

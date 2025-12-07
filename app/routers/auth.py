@@ -9,10 +9,12 @@ from fastapi.responses import RedirectResponse
 from jose import JWTError, jwt
 from pydantic import BaseModel
 from sqlalchemy.orm import Session
+from sqlalchemy.orm.attributes import flag_modified
 
 from app.config import get_settings
 from app.db import get_db
 from app.models import User
+from app.schemas import UserOptions
 
 router = APIRouter(prefix="/api/auth", tags=["auth"])
 
@@ -27,6 +29,7 @@ GOOGLE_USERINFO_URL = "https://www.googleapis.com/oauth2/v2/userinfo"
 # Schemas
 class UserOptionsResponse(BaseModel):
     completed_captcha: bool = False
+    has_seen_donate: bool = False
 
 
 class UserResponse(BaseModel):
@@ -179,12 +182,14 @@ async def google_callback(code: str, db: Session = Depends(get_db)):
     user = db.query(User).filter(User.google_id == google_id).first()
 
     if not user:
-        # Create new user
+        # Create new user with default options
+        default_options = UserOptions().model_dump()
         user = User(
             google_id=google_id,
             email=email,
             name=name,
             avatar_url=avatar_url,
+            options=default_options,
         )
         db.add(user)
         db.commit()
@@ -242,7 +247,7 @@ def mark_captcha_completed(
     authorization: str | None = Header(None),
     db: Session = Depends(get_db),
 ):
-    """Mark the donate captcha as completed for the current user."""
+    """Mark the Norwood captcha as completed for the current user."""
     if not authorization or not authorization.startswith("Bearer "):
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
@@ -270,6 +275,46 @@ def mark_captcha_completed(
     options = user.options or {}
     options["completed_captcha"] = True
     user.options = options
+    flag_modified(user, "options")
+    db.commit()
+
+    return {"success": True}
+
+
+@router.post("/donate-seen")
+def mark_donate_seen(
+    authorization: str | None = Header(None),
+    db: Session = Depends(get_db),
+):
+    """Mark that the user has seen the donate toast."""
+    if not authorization or not authorization.startswith("Bearer "):
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Not authenticated",
+        )
+
+    token = authorization.replace("Bearer ", "")
+    user_id = decode_token(token)
+
+    if not user_id:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Invalid token",
+        )
+
+    user = db.query(User).filter(User.id == user_id).first()
+
+    if not user:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="User not found",
+        )
+
+    # Update options
+    options = user.options or {}
+    options["has_seen_donate"] = True
+    user.options = options
+    flag_modified(user, "options")
     db.commit()
 
     return {"success": True}

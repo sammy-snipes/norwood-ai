@@ -4,8 +4,8 @@ import { useAuthStore } from '../stores/auth'
 import { useTaskStore } from '../stores/tasks'
 import AppHeader from '../components/AppHeader.vue'
 import HistorySidebar from '../components/HistorySidebar.vue'
-import DonatePopup from '../components/DonatePopup.vue'
-import DonateCaptcha from '../components/DonateCaptcha.vue'
+import DonateToast from '../components/DonateToast.vue'
+import NorwoodCaptcha from '../components/NorwoodCaptcha.vue'
 
 const authStore = useAuthStore()
 const taskStore = useTaskStore()
@@ -27,19 +27,33 @@ const historyLoading = ref(false)
 // Toast for delete message
 const toast = ref(null)
 
-// Donate popup
-const showDonatePopup = ref(false)
-const showDonateCaptcha = ref(false)
+// Donate toast
+const showDonateToast = ref(false)
+const showNorwoodCaptcha = ref(false)
 
-const handleDonate = () => {
-  showDonatePopup.value = false
-  showDonateCaptcha.value = false
-  // TODO: integrate with Stripe
-  window.open('https://buy.stripe.com/test_xxx', '_blank')
+const handleDonateClose = async () => {
+  showDonateToast.value = false
+  // Mark as seen so we don't show again
+  try {
+    await fetch(`${API_URL}/api/auth/donate-seen`, {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${authStore.token}`,
+      },
+    })
+    await authStore.fetchUser()
+  } catch (err) {
+    console.error('Failed to mark donate seen:', err)
+  }
+}
+
+const handleDonate = async () => {
+  // Stripe checkout is handled inside DonateToast, just mark as seen
+  await handleDonateClose()
 }
 
 const handleCaptchaComplete = async () => {
-  showDonateCaptcha.value = false
+  showNorwoodCaptcha.value = false
   try {
     await fetch(`${API_URL}/api/auth/captcha-completed`, {
       method: 'POST',
@@ -49,19 +63,26 @@ const handleCaptchaComplete = async () => {
     })
     // Refresh user to update options
     await authStore.fetchUser()
+
+    // After captcha complete, wait 30s then show donate toast (if not seen)
+    setTimeout(() => {
+      if (!authStore.user?.options?.has_seen_donate) {
+        showDonateToast.value = true
+      }
+    }, 30000)
   } catch (err) {
     console.error('Failed to mark captcha completed:', err)
   }
 }
 
-// Show captcha after 2s if user hasn't completed it
+// Show captcha after 10s if user hasn't completed it
 const initCaptchaTimer = () => {
   if (!authStore.user?.options?.completed_captcha) {
     setTimeout(() => {
       if (!authStore.user?.options?.completed_captcha) {
-        showDonateCaptcha.value = true
+        showNorwoodCaptcha.value = true
       }
-    }, 2000)
+    }, 10000)
   }
 }
 const deletionQuotes = [
@@ -297,7 +318,7 @@ const formatDate = (dateStr) => {
 
 <template>
   <div class="min-h-screen bg-gray-900 text-white">
-    <AppHeader />
+    <AppHeader @donate="showDonateToast = true" />
 
     <!-- Main Content with Sidebar -->
     <div class="flex">
@@ -440,16 +461,16 @@ const formatDate = (dateStr) => {
       </Transition>
     </Teleport>
 
-    <!-- Donate popup -->
-    <DonatePopup
-      v-if="showDonatePopup"
-      @close="showDonatePopup = false"
+    <!-- Donate toast -->
+    <DonateToast
+      v-if="showDonateToast"
+      @close="handleDonateClose"
       @donate="handleDonate"
     />
 
-    <!-- Donate captcha -->
-    <DonateCaptcha
-      v-if="showDonateCaptcha"
+    <!-- Norwood captcha (auth verification) -->
+    <NorwoodCaptcha
+      v-if="showNorwoodCaptcha"
       @close="handleCaptchaComplete"
     />
   </div>

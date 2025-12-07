@@ -4,6 +4,7 @@ import { useAuthStore } from '../stores/auth'
 import { useTaskStore } from '../stores/tasks'
 import AppHeader from '../components/AppHeader.vue'
 import HistorySidebar from '../components/HistorySidebar.vue'
+import DonateToast from '../components/DonateToast.vue'
 
 const authStore = useAuthStore()
 const taskStore = useTaskStore()
@@ -33,6 +34,13 @@ const selectedHistoryId = ref(null)
 const fileInputRef = ref(null)
 
 const isPremium = computed(() => authStore.user?.is_premium || authStore.user?.is_admin)
+
+const showDonateToast = ref(false)
+
+const getLinkedInShareUrl = () => {
+  const certUrl = `${window.location.origin}/cert/${certificationId.value}`
+  return `https://www.linkedin.com/sharing/share-offsite/?url=${encodeURIComponent(certUrl)}`
+}
 
 const photoTypes = ['front', 'left', 'right']
 const currentPhotoType = computed(() => photoTypes[step.value - 1])
@@ -447,7 +455,7 @@ onMounted(async () => {
 
 <template>
   <div class="min-h-screen bg-gray-900 text-white">
-    <AppHeader />
+    <AppHeader @donate="showDonateToast = true" />
 
     <!-- Loading -->
     <div v-if="loading" class="flex items-center justify-center min-h-[calc(100vh-41px)]">
@@ -457,10 +465,10 @@ onMounted(async () => {
     <!-- Paywall -->
     <div v-else-if="!isPremium" class="flex items-center justify-center min-h-[calc(100vh-41px)]">
       <div class="text-center">
-        <h2 class="text-lg font-medium text-gray-200 mb-2">Premium Feature</h2>
-        <p class="text-gray-400 text-sm mb-4">Norwood Certification requires a premium subscription.</p>
+        <h2 class="text-lg font-medium text-gray-200 mb-2">Sage Mode Feature</h2>
+        <p class="text-gray-400 text-sm mb-4">Norwood Certification requires Sage Mode.</p>
         <router-link to="/settings" class="text-purple-400 text-sm hover:underline">
-          Upgrade to Premium
+          Enter Sage Mode
         </router-link>
       </div>
     </div>
@@ -710,17 +718,32 @@ onMounted(async () => {
 
           <p class="text-gray-500 text-xs mb-4">Certified on {{ formatDate(certification.certified_at) }}</p>
 
-          <a
-            :href="certification.pdf_url"
-            target="_blank"
-            class="inline-block px-6 py-3 bg-purple-600 hover:bg-purple-500 text-white font-medium rounded transition-colors"
-          >
-            Download PDF Certificate
-          </a>
+          <div class="flex gap-3 justify-center">
+            <a
+              :href="certification.pdf_url"
+              target="_blank"
+              class="inline-block px-6 py-3 bg-purple-600 hover:bg-purple-500 text-white font-medium rounded transition-colors"
+            >
+              Download PDF
+            </a>
+            <a
+              :href="getLinkedInShareUrl()"
+              target="_blank"
+              class="inline-block px-6 py-3 bg-[#0077b5] hover:bg-[#006399] text-white font-medium rounded transition-colors"
+            >
+              Share on LinkedIn
+            </a>
+          </div>
         </div>
       </div>
       </div>
       </main>
     </div>
+
+    <DonateToast
+      v-if="showDonateToast"
+      @close="showDonateToast = false"
+      @donate="showDonateToast = false"
+    />
   </div>
 </template>

@@ -5,6 +5,7 @@ import Landing from '../views/Landing.vue'
 import Analyze from '../views/Analyze.vue'
 import Counseling from '../views/Counseling.vue'
 import Certification from '../views/Certification.vue'
+import CertificatePublic from '../views/CertificatePublic.vue'
 import Settings from '../views/Settings.vue'
 import CheckoutSuccess from '../views/CheckoutSuccess.vue'
 import CheckoutCancel from '../views/CheckoutCancel.vue'
@@ -33,6 +34,12 @@ const routes = [
     name: 'certification',
     component: Certification,
     meta: { requiresAuth: true }
+  },
+  {
+    path: '/cert/:id',
+    name: 'certificate-public',
+    component: CertificatePublic,
+    meta: { requiresAuth: false }
   },
   {
     path: '/settings',

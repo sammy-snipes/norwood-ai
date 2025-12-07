@@ -22,7 +22,7 @@ onMounted(async () => {
     const result = await response.json()
 
     if (result.is_premium) {
-      verificationStatus.value = 'Payment verified! Welcome to Premium!'
+      verificationStatus.value = 'Payment verified! Welcome to Sage Mode!'
       // Refresh user data to update UI
       await authStore.fetchUser()
     } else {
@@ -51,7 +51,7 @@ onMounted(async () => {
     <div class="max-w-md w-full text-center space-y-6">
       <div class="text-6xl mb-4">✨</div>
 
-      <h1 class="text-4xl font-black mb-4">Welcome to Premium!</h1>
+      <h1 class="text-4xl font-black mb-4">Welcome to Sage Mode!</h1>
 
       <div class="p-6 bg-gray-800/50 rounded-lg border border-gray-700 space-y-4">
         <div v-if="verifying" class="text-yellow-400 animate-pulse">
@@ -69,10 +69,10 @@ onMounted(async () => {
         </template>
 
         <div class="pt-4 border-t border-gray-700">
-          <p class="text-yellow-400 font-bold mb-2">Premium Benefits Unlocked:</p>
+          <p class="text-yellow-400 font-bold mb-2">Sage Mode Benefits Unlocked:</p>
           <ul class="text-gray-400 text-sm space-y-1">
-            <li>✓ Unlimited analyses</li>
-            <li>✓ Unlimited roasts</li>
+            <li>✓ Unlimited Norwood analysis</li>
+            <li>✓ Unlimited counseling</li>
             <li>✓ Unlimited existential dread</li>
           </ul>
         </div>

@@ -124,7 +124,7 @@ onUnmounted(() => {
           <div class="p-4 border border-gray-800 rounded-lg">
             <div class="text-gray-600 font-mono text-xs mb-2">fig. 3</div>
             <h3 class="font-medium text-sm mb-1">Projections</h3>
-            <p class="text-gray-500 text-xs">Coming soon (Premium)</p>
+            <p class="text-gray-500 text-xs">Coming soon (Sage Mode)</p>
           </div>
         </div>
 
