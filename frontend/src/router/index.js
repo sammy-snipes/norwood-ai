@@ -6,6 +6,7 @@ import Analyze from '../views/Analyze.vue'
 import Counseling from '../views/Counseling.vue'
 import Certification from '../views/Certification.vue'
 import CertificatePublic from '../views/CertificatePublic.vue'
+import Leaderboard from '../views/Leaderboard.vue'
 import Settings from '../views/Settings.vue'
 import CheckoutSuccess from '../views/CheckoutSuccess.vue'
 import CheckoutCancel from '../views/CheckoutCancel.vue'
@@ -40,6 +41,12 @@ const routes = [
     name: 'certificate-public',
     component: CertificatePublic,
     meta: { requiresAuth: false }
+  },
+  {
+    path: '/leaderboard',
+    name: 'leaderboard',
+    component: Leaderboard,
+    meta: { requiresAuth: true }
   },
   {
     path: '/settings',

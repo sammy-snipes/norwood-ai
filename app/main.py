@@ -14,7 +14,7 @@ from app.celery_worker import celery_app
 from app.config import get_settings
 from app.db import get_db
 from app.models import Analysis, User
-from app.routers import auth_router, certification_router, counseling_router
+from app.routers import auth_router, certification_router, counseling_router, leaderboard_router
 from app.routers.payments import router as payments_router
 from app.schemas import (
     AnalysisHistoryItem,
@@ -55,6 +55,7 @@ app.include_router(auth_router)
 app.include_router(counseling_router)
 app.include_router(certification_router)
 app.include_router(payments_router)
+app.include_router(leaderboard_router)
 
 # Serve static frontend files if they exist (built Vue app)
 STATIC_DIR = FilePath(__file__).parent.parent / "frontend" / "dist"
