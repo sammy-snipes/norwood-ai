@@ -9,6 +9,11 @@ import DonateToast from '../components/DonateToast.vue'
 const authStore = useAuthStore()
 const loading = ref(false)
 const error = ref(null)
+const successMessage = ref(null)
+
+// Admin testing
+const showNorwoodCaptcha = ref(false)
+const showDonateToast = ref(false)
 
 // Admin testing
 const showNorwoodCaptcha = ref(false)
@@ -47,6 +52,7 @@ const handleLogout = () => {
 const upgradeToPremium = async () => {
   loading.value = true
   error.value = null
+  successMessage.value = null
 
   try {
     const response = await fetch(`${API_URL}/api/payments/create-checkout-session`, {
@@ -56,12 +62,21 @@ const upgradeToPremium = async () => {
       }
     })
 
+    const data = await response.json()
+
     if (!response.ok) {
-      const data = await response.json()
-      throw new Error(data.detail || 'Failed to create checkout session')
+      // Check if user already has premium
+      if (data.detail && data.detail.toLowerCase().includes('already')) {
+        // Refresh user data to update UI
+        await authStore.fetchUser()
+        successMessage.value = data.detail
+      } else {
+        throw new Error(data.detail || 'Failed to create checkout session')
+      }
+      loading.value = false
+      return
     }
 
-    const data = await response.json()
     // Open Stripe Checkout in new tab
     window.open(data.checkout_url, '_blank')
     loading.value = false
@@ -112,6 +127,10 @@ const upgradeToPremium = async () => {
 
           <div v-if="error" class="mt-4 p-4 bg-red-900/30 border border-red-700 rounded-lg text-red-400 text-sm">
             {{ error }}
+          </div>
+
+          <div v-if="successMessage" class="mt-4 p-4 bg-green-900/30 border border-green-700 rounded-lg text-green-400 text-sm">
+            {{ successMessage }}
           </div>
 
           <div v-if="!authStore.user?.is_premium" class="mt-6 pt-6 border-t border-gray-700">

@@ -352,7 +352,7 @@ const formatDate = (dateStr) => {
 
         <!-- Upload Area -->
         <div
-          v-else-if="!previewUrl && !result"
+          v-else-if="!previewUrl && !result && canAnalyze"
           class="space-y-6"
         >
           <!-- Norwood Scale Explanation -->
@@ -392,6 +392,26 @@ const formatDate = (dateStr) => {
               <p class="text-sm">Drop image or click to upload</p>
               <p class="text-xs mt-1 text-gray-600">JPEG, PNG, GIF, WebP</p>
             </div>
+          </div>
+        </div>
+
+        <!-- No analyses remaining - prompt to upgrade -->
+        <div
+          v-else-if="!previewUrl && !result && !canAnalyze"
+          class="border border-dashed border-yellow-700/50 rounded-lg p-8 text-center bg-yellow-900/10"
+        >
+          <div class="text-yellow-500">
+            <svg class="w-8 h-8 mx-auto mb-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+            </svg>
+            <p class="text-sm font-medium">No free analyses remaining</p>
+            <p class="text-xs mt-1 text-yellow-600">Upgrade to Premium for unlimited analyses</p>
+            <router-link
+              to="/settings"
+              class="inline-block mt-4 px-4 py-2 bg-gradient-to-r from-yellow-500 to-yellow-600 hover:from-yellow-600 hover:to-yellow-700 rounded-lg text-sm font-bold text-white transition-all"
+            >
+              Upgrade to Premium - $5
+            </router-link>
           </div>
         </div>
 
