@@ -93,6 +93,13 @@ onUnmounted(() => {
             Leaderboard
             <span v-if="!hasUnlimited" class="text-[8px] text-purple-400 bg-purple-900/50 px-0.5 rounded leading-tight">sage</span>
           </router-link>
+          <router-link
+            to="/2048"
+            class="text-xs transition-colors"
+            :class="$route.path === '/2048' ? 'text-gray-400' : 'text-gray-500 hover:text-gray-300'"
+          >
+            2048
+          </router-link>
         </nav>
       </div>
 

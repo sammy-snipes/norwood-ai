@@ -15,10 +15,6 @@ const successMessage = ref(null)
 const showNorwoodCaptcha = ref(false)
 const showDonateToast = ref(false)
 
-// Admin testing
-const showNorwoodCaptcha = ref(false)
-const showDonateToast = ref(false)
-
 const API_URL = import.meta.env.DEV ? 'http://localhost:8000' : ''
 
 const hasUnlimited = computed(() => {
