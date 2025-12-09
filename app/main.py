@@ -129,8 +129,6 @@ async def submit_analysis(
 
     Free users get 1 analysis. Premium users get unlimited analyses.
     """
-    logger.info(f"[DEBUG] Received analyze request - file: {file.filename}, user: {user.email}")
-
     # Check quota
     if not analysis_service.check_can_analyze(user):
         raise HTTPException(
@@ -153,17 +151,11 @@ async def submit_analysis(
             detail=f"Image too large. Maximum size is {settings.MAX_IMAGE_SIZE_MB}MB.",
         )
 
-    # Consume quota
+    # Consume quota and submit task
     analysis_service.consume_analysis_quota(user, db)
-
-    # Encode image to base64 and submit to Celery (processing happens in worker)
     image_base64 = base64.standard_b64encode(contents).decode("utf-8")
-    logger.info("[DEBUG] Image encoded, submitting task...")
+    task = analyze_image_task.delay(image_base64, file.content_type, user.id)
 
-    # Submit task to Celery with user_id for saving results
-    task = analyze_image_task.apply_async(args=[image_base64, file.content_type, user.id])
-
-    logger.info(f"[DEBUG] Task submitted: {task.id}")
     return TaskResponse(task_id=task.id, status="pending")
 
 
