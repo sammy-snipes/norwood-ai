@@ -16,6 +16,7 @@ from app.models import (
     PhotoType,
     ValidationStatus,
 )
+from app.services.images import process_base64_image_for_claude
 from app.services.pdf import generate_certification_pdf
 from app.services.s3 import S3Service
 
@@ -46,6 +47,9 @@ def validate_certification_photo_task(
     logger.info(f"[{task_id}] Validating {photo_type} photo {photo_id}")
 
     try:
+        # Process image: convert HEIC if needed, downsample to Claude's max dimensions
+        image_base64, content_type = process_base64_image_for_claude(image_base64, content_type)
+
         # Execute LLM validation
         result = execute_vision_task(
             images=[(image_base64, content_type)],

@@ -11,6 +11,7 @@ from app.llm.prompts import COCK_ANALYSIS_PROMPT
 from app.llm.schemas import CockAnalysisResult
 from app.models import CockCertification, CockCertificationStatus
 from app.models.cock import calculate_pleasure_zone, calculate_size_category
+from app.services.images import process_base64_image_for_claude
 from app.services.pdf import generate_cock_certification_pdf
 from app.services.s3 import S3Service
 
@@ -52,6 +53,9 @@ def analyze_cock_task(
         db.commit()
 
         try:
+            # Process image: convert HEIC if needed, downsample to Claude's max dimensions
+            image_base64, content_type = process_base64_image_for_claude(image_base64, content_type)
+
             # Get the reference chart
             cock_chart = get_cock_chart()
 

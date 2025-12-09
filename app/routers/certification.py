@@ -232,7 +232,7 @@ def upload_photo(
         db.delete(existing)
         db.commit()
 
-    # Upload to S3
+    # Upload raw image to S3 (processing happens in Celery task)
     s3 = S3Service()
     s3_key = s3.upload_base64_image_with_prefix(
         request.image_base64,
@@ -251,7 +251,7 @@ def upload_photo(
     db.commit()
     db.refresh(photo)
 
-    # Queue validation task
+    # Queue validation task (processing happens there)
     task = validate_certification_photo_task.delay(
         photo.id,
         request.image_base64,

@@ -10,6 +10,7 @@ from app.llm import execute_vision_task
 from app.llm.prompts import NORWOOD_ANALYSIS_PROMPT
 from app.llm.schemas import NorwoodAnalysisResult
 from app.models import Analysis, User
+from app.services.images import process_base64_image_for_claude
 from app.services.s3 import S3Service
 
 settings = get_settings()
@@ -33,6 +34,9 @@ def analyze_image_task(self, image_base64: str, media_type: str, user_id: str) -
     logger.info(f"[{task_id}] Starting analysis for user {user_id}")
 
     try:
+        # Process image: convert HEIC if needed, downsample to Claude's max dimensions
+        image_base64, media_type = process_base64_image_for_claude(image_base64, media_type)
+
         # Execute LLM task with structured output
         # Include norwood chart as reference, then the user's image
         norwood_chart = get_norwood_chart()
