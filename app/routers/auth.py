@@ -9,12 +9,11 @@ from fastapi.responses import RedirectResponse
 from jose import JWTError, jwt
 from pydantic import BaseModel
 from sqlalchemy.orm import Session
-from sqlalchemy.orm.attributes import flag_modified
 
 from app.config import get_settings
 from app.db import get_db
 from app.models import User
-from app.schemas import UserOptions
+from app.services import user as user_service
 
 router = APIRouter(prefix="/api/auth", tags=["auth"])
 
@@ -175,32 +174,13 @@ async def google_callback(code: str, db: Session = Depends(get_db)):
         google_user = userinfo_response.json()
 
     # Find or create user
-    google_id = google_user["id"]
-    email = google_user["email"]
-    name = google_user.get("name")
-    avatar_url = google_user.get("picture")
-
-    user = db.query(User).filter(User.google_id == google_id).first()
-
-    if not user:
-        # Create new user with default options
-        default_options = UserOptions().model_dump()
-        user = User(
-            google_id=google_id,
-            email=email,
-            name=name,
-            avatar_url=avatar_url,
-            options=default_options,
-        )
-        db.add(user)
-        db.commit()
-        db.refresh(user)
-    else:
-        # Update existing user info
-        user.email = email
-        user.name = name
-        user.avatar_url = avatar_url
-        db.commit()
+    user = user_service.get_or_create_from_google(
+        google_id=google_user["id"],
+        email=google_user["email"],
+        name=google_user.get("name"),
+        avatar_url=google_user.get("picture"),
+        db=db,
+    )
 
     # Create JWT
     jwt_token = create_access_token(user.id)
@@ -243,42 +223,33 @@ def get_me(
     return UserResponse.from_user(user)
 
 
+def _get_user_from_auth(authorization: str | None, db: Session) -> User:
+    """Extract and validate user from authorization header."""
+    if not authorization or not authorization.startswith("Bearer "):
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Not authenticated")
+
+    token = authorization.replace("Bearer ", "")
+    user_id = decode_token(token)
+
+    if not user_id:
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid token")
+
+    user = db.query(User).filter(User.id == user_id).first()
+
+    if not user:
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="User not found")
+
+    return user
+
+
 @router.post("/captcha-completed")
 def mark_captcha_completed(
     authorization: str | None = Header(None),
     db: Session = Depends(get_db),
 ):
     """Mark the Norwood captcha as completed for the current user."""
-    if not authorization or not authorization.startswith("Bearer "):
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Not authenticated",
-        )
-
-    token = authorization.replace("Bearer ", "")
-    user_id = decode_token(token)
-
-    if not user_id:
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Invalid token",
-        )
-
-    user = db.query(User).filter(User.id == user_id).first()
-
-    if not user:
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="User not found",
-        )
-
-    # Update options
-    options = user.options or {}
-    options["completed_captcha"] = True
-    user.options = options
-    flag_modified(user, "options")
-    db.commit()
-
+    user = _get_user_from_auth(authorization, db)
+    user_service.update_option(user, "completed_captcha", True, db)
     return {"success": True}
 
 
@@ -288,36 +259,8 @@ def mark_donate_seen(
     db: Session = Depends(get_db),
 ):
     """Mark that the user has seen the donate toast."""
-    if not authorization or not authorization.startswith("Bearer "):
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Not authenticated",
-        )
-
-    token = authorization.replace("Bearer ", "")
-    user_id = decode_token(token)
-
-    if not user_id:
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Invalid token",
-        )
-
-    user = db.query(User).filter(User.id == user_id).first()
-
-    if not user:
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="User not found",
-        )
-
-    # Update options
-    options = user.options or {}
-    options["has_seen_donate"] = True
-    user.options = options
-    flag_modified(user, "options")
-    db.commit()
-
+    user = _get_user_from_auth(authorization, db)
+    user_service.update_option(user, "has_seen_donate", True, db)
     return {"success": True}
 
 
@@ -332,34 +275,6 @@ def set_leaderboard_visibility(
     db: Session = Depends(get_db),
 ):
     """Set whether user appears on leaderboard."""
-    if not authorization or not authorization.startswith("Bearer "):
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Not authenticated",
-        )
-
-    token = authorization.replace("Bearer ", "")
-    user_id = decode_token(token)
-
-    if not user_id:
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Invalid token",
-        )
-
-    user = db.query(User).filter(User.id == user_id).first()
-
-    if not user:
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="User not found",
-        )
-
-    # Update options
-    options = user.options or {}
-    options["show_on_leaderboard"] = request.visible
-    user.options = options
-    flag_modified(user, "options")
-    db.commit()
-
+    user = _get_user_from_auth(authorization, db)
+    user_service.update_option(user, "show_on_leaderboard", request.visible, db)
     return {"success": True}

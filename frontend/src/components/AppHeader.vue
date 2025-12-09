@@ -134,6 +134,7 @@ onUnmounted(() => {
               <img
                 v-if="authStore.user?.avatar_url"
                 :src="authStore.user.avatar_url"
+                referrerpolicy="no-referrer"
                 class="w-6 h-6 rounded-full"
               />
               <div v-else class="w-6 h-6 rounded-full bg-gray-600"></div>

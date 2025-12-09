@@ -7,9 +7,9 @@ from pydantic import BaseModel
 from sqlalchemy.orm import Session
 
 from app.db import get_db
-from app.models import CockCertification, CockCertificationStatus, User
+from app.models import User
 from app.routers.auth import decode_token
-from app.services.s3 import S3Service
+from app.services import cock as cock_service
 from app.tasks.cock import analyze_cock_task
 
 router = APIRouter(prefix="/api/cock", tags=["cock"])
@@ -98,11 +98,7 @@ def submit_photo(
     db: Session = Depends(get_db),
 ):
     """Submit a cock photo for certification."""
-    # Create certification record (s3_key will be set by the task after processing)
-    certification = CockCertification(user_id=user.id)
-    db.add(certification)
-    db.commit()
-    db.refresh(certification)
+    certification = cock_service.create_certification(user, db)
 
     # Queue analysis task (processes image, uploads to S3, analyzes)
     task = analyze_cock_task.delay(
@@ -111,10 +107,7 @@ def submit_photo(
         request.content_type,
     )
 
-    return SubmitPhotoResponse(
-        certification_id=certification.id,
-        task_id=task.id,
-    )
+    return SubmitPhotoResponse(certification_id=certification.id, task_id=task.id)
 
 
 @router.get("/{cert_id}", response_model=CockCertificationResponse)
@@ -124,40 +117,12 @@ def get_certification(
     db: Session = Depends(get_db),
 ):
     """Get certification status and results."""
-    certification = (
-        db.query(CockCertification)
-        .filter(
-            CockCertification.id == cert_id,
-            CockCertification.user_id == user.id,
-        )
-        .first()
-    )
-
+    certification = cock_service.get_by_id(cert_id, user, db)
     if not certification:
         raise HTTPException(status_code=404, detail="Certification not found")
 
-    pdf_url = None
-    if certification.pdf_s3_key:
-        try:
-            s3 = S3Service()
-            pdf_url = s3.get_presigned_url(certification.pdf_s3_key)
-        except Exception:
-            pass
-
-    return CockCertificationResponse(
-        id=certification.id,
-        status=certification.status.value,
-        length_inches=certification.length_inches,
-        girth_inches=certification.girth_inches,
-        size_category=certification.size_category.value if certification.size_category else None,
-        pleasure_zone=certification.pleasure_zone.name if certification.pleasure_zone else None,
-        pleasure_zone_label=certification.pleasure_zone_label,
-        description=certification.description,
-        confidence=certification.confidence,
-        reference_objects_used=certification.reference_objects_used,
-        pdf_url=pdf_url,
-        certified_at=certification.certified_at,
-    )
+    status_data = cock_service.get_status(certification)
+    return CockCertificationResponse(**status_data)
 
 
 @router.get("/{cert_id}/pdf")
@@ -167,24 +132,15 @@ def download_pdf(
     db: Session = Depends(get_db),
 ):
     """Get presigned URL for PDF download."""
-    certification = (
-        db.query(CockCertification)
-        .filter(
-            CockCertification.id == cert_id,
-            CockCertification.user_id == user.id,
-        )
-        .first()
-    )
-
+    certification = cock_service.get_by_id(cert_id, user, db)
     if not certification:
         raise HTTPException(status_code=404, detail="Certification not found")
 
-    if not certification.pdf_s3_key:
+    pdf_url = cock_service.get_pdf_url(certification)
+    if not pdf_url:
         raise HTTPException(status_code=404, detail="PDF not yet generated")
 
-    s3 = S3Service()
-    url = s3.get_presigned_url(certification.pdf_s3_key, expires_in=3600)
-    return {"pdf_url": url}
+    return {"pdf_url": pdf_url}
 
 
 @router.get("/history/all", response_model=list[CockHistoryItem])
@@ -193,30 +149,8 @@ def get_history(
     db: Session = Depends(get_db),
 ):
     """Get user's cock certification history."""
-    certifications = (
-        db.query(CockCertification)
-        .filter(
-            CockCertification.user_id == user.id,
-            CockCertification.status == CockCertificationStatus.completed,
-        )
-        .order_by(CockCertification.certified_at.desc())
-        .all()
-    )
-
-    s3 = S3Service()
-    return [
-        CockHistoryItem(
-            id=c.id,
-            length_inches=c.length_inches,
-            girth_inches=c.girth_inches,
-            size_category=c.size_category.value if c.size_category else None,
-            pleasure_zone=c.pleasure_zone.name if c.pleasure_zone else None,
-            pleasure_zone_label=c.pleasure_zone_label,
-            certified_at=c.certified_at,
-            pdf_url=s3.get_presigned_url(c.pdf_s3_key) if c.pdf_s3_key else None,
-        )
-        for c in certifications
-    ]
+    history = cock_service.get_history(user, db)
+    return [CockHistoryItem(**item) for item in history]
 
 
 @router.get("/public/{cert_id}")
@@ -225,26 +159,10 @@ def get_public_certification(
     db: Session = Depends(get_db),
 ):
     """Get public certification info (no auth required)."""
-    certification = (
-        db.query(CockCertification)
-        .filter(
-            CockCertification.id == cert_id,
-            CockCertification.status == CockCertificationStatus.completed,
-        )
-        .first()
-    )
-
-    if not certification:
+    info = cock_service.get_public_info(cert_id, db)
+    if not info:
         raise HTTPException(status_code=404, detail="Certification not found")
-
-    return {
-        "length_inches": certification.length_inches,
-        "girth_inches": certification.girth_inches,
-        "size_category": certification.size_category.value if certification.size_category else None,
-        "pleasure_zone": certification.pleasure_zone.name if certification.pleasure_zone else None,
-        "pleasure_zone_label": certification.pleasure_zone_label,
-        "certified_at": certification.certified_at,
-    }
+    return info
 
 
 @router.delete("/{cert_id}")
@@ -254,34 +172,7 @@ def delete_certification(
     db: Session = Depends(get_db),
 ):
     """Delete a certification."""
-    certification = (
-        db.query(CockCertification)
-        .filter(
-            CockCertification.id == cert_id,
-            CockCertification.user_id == user.id,
-        )
-        .first()
-    )
-
-    if not certification:
+    deleted = cock_service.delete_with_cleanup(cert_id, user, db)
+    if not deleted:
         raise HTTPException(status_code=404, detail="Certification not found")
-
-    # Delete image from S3
-    s3 = S3Service()
-    if certification.s3_key:
-        try:
-            s3.delete_image(certification.s3_key)
-        except Exception:
-            pass
-
-    # Delete PDF if exists
-    if certification.pdf_s3_key:
-        try:
-            s3.delete_image(certification.pdf_s3_key)
-        except Exception:
-            pass
-
-    db.delete(certification)
-    db.commit()
-
     return {"success": True}

@@ -7,9 +7,9 @@ from pydantic import BaseModel
 from sqlalchemy.orm import Session
 
 from app.db import get_db
-from app.models import CounselingMessage, CounselingSession, User
-from app.models.counseling import MessageRole, MessageStatus
+from app.models import User
 from app.routers.auth import decode_token
+from app.services import counseling as counseling_service
 from app.tasks.counseling import generate_counseling_response_task
 
 router = APIRouter(prefix="/api/counseling", tags=["counseling"])
@@ -103,22 +103,8 @@ def list_sessions(
     db: Session = Depends(get_db),
 ):
     """List all counseling sessions for the user."""
-    sessions = (
-        db.query(CounselingSession)
-        .filter(CounselingSession.user_id == user.id)
-        .order_by(CounselingSession.updated_at.desc())
-        .all()
-    )
-
-    return [
-        SessionResponse(
-            id=s.id,
-            title=s.title,
-            created_at=s.created_at,
-            message_count=len(s.messages),
-        )
-        for s in sessions
-    ]
+    sessions = counseling_service.list_sessions(user, db)
+    return [SessionResponse(**s) for s in sessions]
 
 
 @router.post("/sessions", response_model=SessionResponse)
@@ -127,11 +113,7 @@ def create_session(
     db: Session = Depends(get_db),
 ):
     """Create a new counseling session."""
-    session = CounselingSession(user_id=user.id)
-    db.add(session)
-    db.commit()
-    db.refresh(session)
-
+    session = counseling_service.create_session(user, db)
     return SessionResponse(
         id=session.id,
         title=session.title,
@@ -147,32 +129,16 @@ def get_session(
     db: Session = Depends(get_db),
 ):
     """Get a session with all messages."""
-    session = (
-        db.query(CounselingSession)
-        .filter(CounselingSession.id == session_id, CounselingSession.user_id == user.id)
-        .first()
-    )
-
+    session = counseling_service.get_session_by_id(session_id, user, db)
     if not session:
         raise HTTPException(status_code=404, detail="Session not found")
 
-    # Sort messages by created_at, then by id (ULID) to ensure consistent ordering
-    sorted_messages = sorted(session.messages, key=lambda m: (m.created_at, m.id))
-
+    detail = counseling_service.get_session_detail(session)
     return SessionDetailResponse(
-        id=session.id,
-        title=session.title,
-        created_at=session.created_at,
-        messages=[
-            MessageResponse(
-                id=m.id,
-                role=m.role,
-                content=m.content,
-                status=m.status,
-                created_at=m.created_at,
-            )
-            for m in sorted_messages
-        ],
+        id=detail["id"],
+        title=detail["title"],
+        created_at=detail["created_at"],
+        messages=[MessageResponse(**m) for m in detail["messages"]],
     )
 
 
@@ -184,42 +150,11 @@ def send_message(
     db: Session = Depends(get_db),
 ):
     """Send a message and queue Claude's response."""
-    session = (
-        db.query(CounselingSession)
-        .filter(CounselingSession.id == session_id, CounselingSession.user_id == user.id)
-        .first()
-    )
-
+    session = counseling_service.get_session_by_id(session_id, user, db)
     if not session:
         raise HTTPException(status_code=404, detail="Session not found")
 
-    # Save user message (completed immediately) and commit
-    user_msg = CounselingMessage(
-        session_id=session.id,
-        role=MessageRole.user,
-        content=request.content,
-        status=MessageStatus.completed,
-    )
-    db.add(user_msg)
-
-    # Auto-generate title from first message if not set
-    if not session.title:
-        words = request.content.split()[:5]
-        session.title = " ".join(words) + ("..." if len(words) == 5 else "")
-
-    db.commit()
-    db.refresh(user_msg)
-
-    # Create pending assistant message (separate transaction for different timestamp)
-    assistant_msg = CounselingMessage(
-        session_id=session.id,
-        role=MessageRole.assistant,
-        content=None,
-        status=MessageStatus.pending,
-    )
-    db.add(assistant_msg)
-    db.commit()
-    db.refresh(assistant_msg)
+    user_msg, assistant_msg = counseling_service.send_message(session, request.content, db)
 
     # Queue the Celery task
     task = generate_counseling_response_task.delay(
@@ -254,24 +189,10 @@ def get_message_status(
     db: Session = Depends(get_db),
 ):
     """Poll for message status (used for async responses)."""
-    message = (
-        db.query(CounselingMessage)
-        .join(CounselingSession)
-        .filter(
-            CounselingMessage.id == message_id,
-            CounselingSession.user_id == user.id,
-        )
-        .first()
-    )
-
-    if not message:
+    status_data = counseling_service.get_message_status(message_id, user, db)
+    if not status_data:
         raise HTTPException(status_code=404, detail="Message not found")
-
-    return MessageStatusResponse(
-        id=message.id,
-        status=message.status,
-        content=message.content,
-    )
+    return MessageStatusResponse(**status_data)
 
 
 @router.delete("/sessions/{session_id}")
@@ -281,16 +202,7 @@ def delete_session(
     db: Session = Depends(get_db),
 ):
     """Delete a counseling session."""
-    session = (
-        db.query(CounselingSession)
-        .filter(CounselingSession.id == session_id, CounselingSession.user_id == user.id)
-        .first()
-    )
-
-    if not session:
+    deleted = counseling_service.delete_session(session_id, user, db)
+    if not deleted:
         raise HTTPException(status_code=404, detail="Session not found")
-
-    db.delete(session)
-    db.commit()
-
     return {"success": True}
