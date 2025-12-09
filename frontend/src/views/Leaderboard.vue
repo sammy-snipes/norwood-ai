@@ -1,12 +1,10 @@
 <script setup>
 import { ref, computed, onMounted } from 'vue'
 import { useAuthStore } from '../stores/auth'
-import { usePreferencesStore } from '../stores/preferences'
 import AppHeader from '../components/AppHeader.vue'
 import DonateToast from '../components/DonateToast.vue'
 
 const authStore = useAuthStore()
-const preferencesStore = usePreferencesStore()
 const API_URL = import.meta.env.DEV ? 'http://localhost:8000' : ''
 
 const loading = ref(true)
@@ -182,7 +180,7 @@ onMounted(() => {
           </div>
 
           <!-- Cock Power Rankings -->
-          <div v-if="preferencesStore.adultContentEnabled" class="grid grid-cols-2 gap-8">
+          <div v-if="authStore.user?.adult_content_enabled" class="grid grid-cols-2 gap-8">
             <!-- Pleasure Zone Rankings -->
             <div class="bg-gray-800/50 rounded-lg p-5">
               <h2 class="text-sm font-medium text-pink-400 mb-4">Cock Power: Pleasure</h2>

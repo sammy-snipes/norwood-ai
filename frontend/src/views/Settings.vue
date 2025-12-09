@@ -2,13 +2,11 @@
 import { ref, computed } from 'vue'
 import { useRouter } from 'vue-router'
 import { useAuthStore } from '../stores/auth'
-import { usePreferencesStore } from '../stores/preferences'
 import AppHeader from '../components/AppHeader.vue'
 import NorwoodCaptcha from '../components/NorwoodCaptcha.vue'
 import DonateToast from '../components/DonateToast.vue'
 
 const authStore = useAuthStore()
-const preferencesStore = usePreferencesStore()
 const loading = ref(false)
 const error = ref(null)
 const successMessage = ref(null)
@@ -38,6 +36,25 @@ const showOnLeaderboard = computed({
       await authStore.fetchUser()
     } catch (err) {
       console.error('Failed to update leaderboard visibility:', err)
+    }
+  }
+})
+
+const adultContentEnabled = computed({
+  get: () => authStore.user?.adult_content_enabled ?? false,
+  set: async (value) => {
+    try {
+      await fetch(`${API_URL}/api/auth/adult-content`, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${authStore.token}`,
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({ enabled: value })
+      })
+      await authStore.fetchUser()
+    } catch (err) {
+      console.error('Failed to update adult content setting:', err)
     }
   }
 })
@@ -161,8 +178,7 @@ const upgradeToPremium = async () => {
           <label class="flex items-center gap-2 cursor-pointer">
             <input
               type="checkbox"
-              :checked="preferencesStore.adultContentEnabled"
-              @change="preferencesStore.setAdultContentEnabled($event.target.checked)"
+              v-model="adultContentEnabled"
               class="w-3 h-3 accent-pink-500"
             />
             <span class="text-xs text-gray-400">Enable "Rate My Cock" feature</span>
