@@ -16,7 +16,7 @@ from app.models import (
     PhotoType,
     ValidationStatus,
 )
-from app.services.images import process_base64_image_for_claude
+from app.services.images import process_and_upload_image
 from app.services.pdf import generate_certification_pdf
 from app.services.s3 import S3Service
 
@@ -30,6 +30,8 @@ def validate_certification_photo_task(
     image_base64: str,
     content_type: str,
     photo_type: str,
+    user_id: str,
+    cert_id: str,
 ) -> dict:
     """
     Validate a certification photo for quality.
@@ -39,6 +41,8 @@ def validate_certification_photo_task(
         image_base64: Base64-encoded image data
         content_type: MIME type of the image
         photo_type: Type of photo (front, left, right)
+        user_id: ID of the user
+        cert_id: ID of the certification
 
     Returns:
         dict with success status and validation result
@@ -47,8 +51,10 @@ def validate_certification_photo_task(
     logger.info(f"[{task_id}] Validating {photo_type} photo {photo_id}")
 
     try:
-        # Process image: convert HEIC if needed, downsample to Claude's max dimensions
-        image_base64, content_type = process_base64_image_for_claude(image_base64, content_type)
+        # Process image and upload to S3
+        s3_key, image_base64, content_type = process_and_upload_image(
+            image_base64, content_type, user_id, f"certifications/{cert_id}"
+        )
 
         # Execute LLM validation
         result = execute_vision_task(
@@ -68,6 +74,7 @@ def validate_certification_photo_task(
                 logger.error(f"[{task_id}] Photo {photo_id} not found")
                 return {"success": False, "error": "Photo not found"}
 
+            photo.s3_key = s3_key
             photo.validation_status = (
                 ValidationStatus.approved if result.approved else ValidationStatus.rejected
             )

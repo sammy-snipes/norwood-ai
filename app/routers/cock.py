@@ -98,25 +98,13 @@ def submit_photo(
     db: Session = Depends(get_db),
 ):
     """Submit a cock photo for certification."""
-    # Upload raw image to S3 (processing happens in Celery task)
-    s3 = S3Service()
-    s3_key = s3.upload_base64_image_with_prefix(
-        request.image_base64,
-        user.id,
-        request.content_type,
-        "cock_certifications",
-    )
-
-    # Create certification record
-    certification = CockCertification(
-        user_id=user.id,
-        s3_key=s3_key,
-    )
+    # Create certification record (s3_key will be set by the task after processing)
+    certification = CockCertification(user_id=user.id)
     db.add(certification)
     db.commit()
     db.refresh(certification)
 
-    # Queue analysis task (processing happens there)
+    # Queue analysis task (processes image, uploads to S3, analyzes)
     task = analyze_cock_task.delay(
         certification.id,
         request.image_base64,

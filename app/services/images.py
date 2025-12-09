@@ -176,3 +176,41 @@ def process_base64_image_for_claude(
         output_format=output_format,
         jpeg_quality=jpeg_quality,
     )
+
+
+def process_and_upload_image(
+    base64_data: str,
+    content_type: str,
+    user_id: str,
+    s3_prefix: str,
+) -> tuple[str, str, str]:
+    """
+    Process an image and upload to S3.
+
+    Args:
+        base64_data: Base64-encoded image data
+        content_type: Original MIME type
+        user_id: User ID for S3 path
+        s3_prefix: S3 prefix (e.g., "analyses", "certifications/abc123")
+
+    Returns:
+        Tuple of (s3_key, processed_base64, processed_content_type)
+    """
+    from app.services.s3 import S3Service
+
+    # Process image
+    processed_base64, processed_content_type = process_base64_image_for_claude(
+        base64_data, content_type
+    )
+
+    # Upload to S3
+    s3 = S3Service()
+    s3_key = s3.upload_base64_image_with_prefix(
+        processed_base64,
+        user_id,
+        processed_content_type,
+        s3_prefix,
+    )
+    logger.info(f"Uploaded processed image to S3: {s3_key}")
+
+    return s3_key, processed_base64, processed_content_type
