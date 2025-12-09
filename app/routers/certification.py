@@ -232,31 +232,23 @@ def upload_photo(
         db.delete(existing)
         db.commit()
 
-    # Upload to S3
-    s3 = S3Service()
-    s3_key = s3.upload_base64_image_with_prefix(
-        request.image_base64,
-        user.id,
-        request.content_type,
-        f"certifications/{cert_id}",
-    )
-
-    # Create photo record
+    # Create photo record (s3_key will be set by the task after processing)
     photo = CertificationPhoto(
         certification_id=cert_id,
         photo_type=photo_type,
-        s3_key=s3_key,
     )
     db.add(photo)
     db.commit()
     db.refresh(photo)
 
-    # Queue validation task
+    # Queue validation task (processes image, uploads to S3, validates)
     task = validate_certification_photo_task.delay(
         photo.id,
         request.image_base64,
         request.content_type,
         photo_type.value,
+        user.id,
+        cert_id,
     )
 
     return PhotoUploadResponse(

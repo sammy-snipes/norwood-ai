@@ -11,6 +11,7 @@ from app.llm.prompts import COCK_ANALYSIS_PROMPT
 from app.llm.schemas import CockAnalysisResult
 from app.models import CockCertification, CockCertificationStatus
 from app.models.cock import calculate_pleasure_zone, calculate_size_category
+from app.services.images import process_and_upload_image
 from app.services.pdf import generate_cock_certification_pdf
 from app.services.s3 import S3Service
 
@@ -52,6 +53,13 @@ def analyze_cock_task(
         db.commit()
 
         try:
+            # Process image and upload to S3
+            s3_key, image_base64, content_type = process_and_upload_image(
+                image_base64, content_type, certification.user_id, "cock_certifications"
+            )
+            certification.s3_key = s3_key
+            db.commit()
+
             # Get the reference chart
             cock_chart = get_cock_chart()
 

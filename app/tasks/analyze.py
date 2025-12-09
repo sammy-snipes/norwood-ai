@@ -10,7 +10,7 @@ from app.llm import execute_vision_task
 from app.llm.prompts import NORWOOD_ANALYSIS_PROMPT
 from app.llm.schemas import NorwoodAnalysisResult
 from app.models import Analysis, User
-from app.services.s3 import S3Service
+from app.services.images import process_and_upload_image
 
 settings = get_settings()
 logger = logging.getLogger(__name__)
@@ -33,8 +33,12 @@ def analyze_image_task(self, image_base64: str, media_type: str, user_id: str) -
     logger.info(f"[{task_id}] Starting analysis for user {user_id}")
 
     try:
+        # Process image and upload to S3
+        image_key, image_base64, media_type = process_and_upload_image(
+            image_base64, media_type, user_id, "analyses"
+        )
+
         # Execute LLM task with structured output
-        # Include norwood chart as reference, then the user's image
         norwood_chart = get_norwood_chart()
         result = execute_vision_task(
             images=[norwood_chart, (image_base64, media_type)],
@@ -44,21 +48,6 @@ def analyze_image_task(self, image_base64: str, media_type: str, user_id: str) -
         )
 
         logger.info(f"[{task_id}] LLM returned stage {result.norwood_stage}")
-
-        # Upload image to S3
-        image_key = None
-        if settings.S3_BUCKET_NAME:
-            try:
-                s3 = S3Service()
-                image_key = s3.upload_base64_image(
-                    base64_data=image_base64,
-                    user_id=user_id,
-                    content_type=media_type,
-                )
-                logger.info(f"[{task_id}] Uploaded image to S3")
-            except Exception as e:
-                logger.error(f"[{task_id}] Failed to upload to S3: {e}")
-                # Continue without image - don't fail the whole analysis
 
         # Save analysis to database
         with get_db_context() as db:

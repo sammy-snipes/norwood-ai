@@ -13,7 +13,6 @@ const taskStore = useTaskStore()
 const API_URL = import.meta.env.DEV ? 'http://localhost:8000' : ''
 
 const selectedFile = ref(null)
-const previewUrl = ref(null)
 const isLoading = ref(false)
 const result = ref(null)
 const error = ref(null)
@@ -153,7 +152,6 @@ const viewAnalysis = (item) => {
   }
   // Clear upload state when viewing history
   selectedFile.value = null
-  previewUrl.value = null
   error.value = null
 }
 
@@ -174,9 +172,9 @@ const onFileSelect = (event) => {
   const file = event.target.files[0]
   if (file) {
     selectedFile.value = file
-    previewUrl.value = URL.createObjectURL(file)
     result.value = null
     error.value = null
+    analyze()
   }
 }
 
@@ -184,9 +182,9 @@ const onDrop = (event) => {
   const file = event.dataTransfer.files[0]
   if (file && file.type.startsWith('image/')) {
     selectedFile.value = file
-    previewUrl.value = URL.createObjectURL(file)
     result.value = null
     error.value = null
+    analyze()
   }
 }
 
@@ -207,7 +205,6 @@ const handleAnalysisComplete = async ({ success, result: taskResult }) => {
 
     // Clear upload state
     selectedFile.value = null
-    previewUrl.value = null
 
     // Update sidebar and load full analysis with image from DB
     await fetchHistory()
@@ -259,7 +256,6 @@ const analyze = async () => {
 
 const reset = () => {
   selectedFile.value = null
-  previewUrl.value = null
   result.value = null
   error.value = null
   selectedHistoryId.value = null
@@ -344,15 +340,15 @@ const formatDate = (dateStr) => {
       <!-- Main Content -->
       <main class="flex-1 p-6 h-[calc(100vh-41px)] overflow-y-auto">
         <div class="max-w-xl mx-auto">
-        <!-- Loading State (when returning to page with pending task) -->
-        <div v-if="isLoading && !previewUrl" class="text-center py-12">
+        <!-- Loading State -->
+        <div v-if="isLoading" class="text-center py-12">
           <div class="w-12 h-12 border-2 border-purple-600 border-t-transparent rounded-full animate-spin mx-auto mb-4"></div>
           <p class="text-gray-400 text-sm">Analyzing...</p>
         </div>
 
         <!-- Upload Area -->
         <div
-          v-else-if="!previewUrl && !result && canAnalyze"
+          v-else-if="!result && canAnalyze"
           class="space-y-6"
         >
           <!-- Norwood Scale Explanation -->
@@ -390,14 +386,14 @@ const formatDate = (dateStr) => {
                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12" />
               </svg>
               <p class="text-sm">Drop image or click to upload</p>
-              <p class="text-xs mt-1 text-gray-600">JPEG, PNG, GIF, WebP</p>
+              <p class="text-xs mt-1 text-gray-600">JPEG, PNG, GIF, WebP, HEIC</p>
             </div>
           </div>
         </div>
 
         <!-- No analyses remaining - prompt to upgrade -->
         <div
-          v-else-if="!previewUrl && !result && !canAnalyze"
+          v-else-if="!result && !canAnalyze"
           class="border border-dashed border-yellow-700/50 rounded-lg p-8 text-center bg-yellow-900/10"
         >
           <div class="text-yellow-500">
@@ -413,40 +409,6 @@ const formatDate = (dateStr) => {
               Upgrade to Premium - $5
             </router-link>
           </div>
-        </div>
-
-        <!-- Preview & Analyze -->
-        <div v-if="previewUrl" class="space-y-4">
-          <div class="relative">
-            <img
-              :src="previewUrl"
-              alt="Preview"
-              class="w-full max-h-64 object-contain rounded-lg bg-gray-800"
-            />
-            <button
-              @click="reset"
-              class="absolute top-2 right-2 bg-gray-800/80 hover:bg-gray-700 rounded-full p-1.5"
-            >
-              <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
-              </svg>
-            </button>
-          </div>
-
-          <button
-            @click="analyze"
-            :disabled="isLoading || !canAnalyze"
-            class="w-full py-2 bg-gray-700 hover:bg-gray-600 disabled:bg-gray-800 disabled:text-gray-500 disabled:cursor-not-allowed rounded text-sm font-medium transition-colors"
-          >
-            <span v-if="isLoading" class="flex items-center justify-center">
-              <svg class="animate-spin -ml-1 mr-2 h-4 w-4" fill="none" viewBox="0 0 24 24">
-                <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
-                <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-              </svg>
-              {{ taskStatus === 'submitting' ? 'Submitting...' : 'Analyzing...' }}
-            </span>
-            <span v-else>Analyze Norwood</span>
-          </button>
         </div>
 
         <!-- Error -->

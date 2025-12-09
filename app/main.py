@@ -148,16 +148,19 @@ async def submit_analysis(
             f"[DEBUG] User {user.id} has {user.free_analyses_remaining} free analyses remaining"
         )
 
-    # Validate file type
-    if file.content_type not in [
+    # Validate file type (including HEIC which will be converted)
+    allowed_types = [
         "image/jpeg",
         "image/png",
         "image/gif",
         "image/webp",
-    ]:
+        "image/heic",
+        "image/heif",
+    ]
+    if file.content_type not in allowed_types:
         raise HTTPException(
             status_code=http_status.HTTP_400_BAD_REQUEST,
-            detail=f"Unsupported image type: {file.content_type}. Use JPEG, PNG, GIF, or WebP.",
+            detail=f"Unsupported image type: {file.content_type}. Use JPEG, PNG, GIF, WebP, or HEIC.",
         )
 
     # Read and validate file size
@@ -168,7 +171,7 @@ async def submit_analysis(
             detail=f"Image too large. Maximum size is {settings.MAX_IMAGE_SIZE_MB}MB.",
         )
 
-    # Encode image to base64
+    # Encode image to base64 and submit to Celery (processing happens in worker)
     image_base64 = base64.standard_b64encode(contents).decode("utf-8")
     logger.info("[DEBUG] Image encoded, submitting task...")
 
