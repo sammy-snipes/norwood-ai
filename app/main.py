@@ -19,6 +19,7 @@ from app.routers import (
     certification_router,
     cock_router,
     counseling_router,
+    game2048_router,
     leaderboard_router,
 )
 from app.routers.payments import router as payments_router
@@ -61,6 +62,7 @@ app.include_router(auth_router)
 app.include_router(counseling_router)
 app.include_router(certification_router)
 app.include_router(cock_router)
+app.include_router(game2048_router)
 app.include_router(payments_router)
 app.include_router(leaderboard_router)
 

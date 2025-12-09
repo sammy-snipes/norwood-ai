@@ -17,6 +17,7 @@ from app.models.cock import (
     calculate_size_category,
 )
 from app.models.counseling import CounselingMessage, CounselingSession
+from app.models.game2048 import Game2048Score
 from app.models.payment import Payment
 from app.models.user import User
 
@@ -40,4 +41,5 @@ __all__ = [
     "calculate_pleasure_zone",
     "calculate_size_category",
     "SIZE_CATEGORY_LABELS",
+    "Game2048Score",
 ]

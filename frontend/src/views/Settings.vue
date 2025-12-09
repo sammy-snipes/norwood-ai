@@ -2,11 +2,13 @@
 import { ref, computed } from 'vue'
 import { useRouter } from 'vue-router'
 import { useAuthStore } from '../stores/auth'
+import { usePreferencesStore } from '../stores/preferences'
 import AppHeader from '../components/AppHeader.vue'
 import NorwoodCaptcha from '../components/NorwoodCaptcha.vue'
 import DonateToast from '../components/DonateToast.vue'
 
 const authStore = useAuthStore()
+const preferencesStore = usePreferencesStore()
 const loading = ref(false)
 const error = ref(null)
 const successMessage = ref(null)
@@ -151,6 +153,21 @@ const upgradeToPremium = async () => {
             />
             <span class="text-xs text-gray-400">Appear on leaderboard</span>
           </label>
+        </div>
+
+        <!-- Ages 11+ Content -->
+        <div class="p-4 bg-gray-800/50 rounded-lg border border-pink-900/30">
+          <h3 class="text-xs font-medium mb-3 text-pink-400">Ages 11+</h3>
+          <label class="flex items-center gap-2 cursor-pointer">
+            <input
+              type="checkbox"
+              :checked="preferencesStore.adultContentEnabled"
+              @change="preferencesStore.setAdultContentEnabled($event.target.checked)"
+              class="w-3 h-3 accent-pink-500"
+            />
+            <span class="text-xs text-gray-400">Enable "Rate My Cock" feature</span>
+          </label>
+          <p class="mt-2 text-xs text-gray-600">Shows rooster content in navigation and leaderboard</p>
         </div>
 
         <!-- The Criticism -->

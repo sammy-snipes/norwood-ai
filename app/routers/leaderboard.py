@@ -14,6 +14,7 @@ from app.models import (
     CockCertification,
     CockCertificationStatus,
     CounselingSession,
+    Game2048Score,
     User,
 )
 from app.routers.auth import decode_token
@@ -48,12 +49,20 @@ class CockSizeEntry(BaseModel):
     avatar_url: str | None = None
 
 
+class Game2048Entry(BaseModel):
+    username: str
+    score: int
+    highest_tile: int
+    avatar_url: str | None = None
+
+
 class LeaderboardResponse(BaseModel):
     best_norwood: list[NorwoodEntry]
     worst_norwood: list[NorwoodEntry]
     insecurity_index: list[InsecurityEntry]
     cock_pleasure: list[CockPleasureEntry]
     cock_size: list[CockSizeEntry]
+    game_2048_high_scores: list[Game2048Entry]
 
 
 # Insecurity scoring weights
@@ -284,10 +293,39 @@ def get_leaderboard(
         for c in size_sorted
     ]
 
+    # 2048 High Scores - get best score per user
+    game_scores = (
+        db.query(Game2048Score)
+        .join(User, Game2048Score.user_id == User.id)
+        .order_by(Game2048Score.score.desc())
+        .all()
+    )
+
+    # Get best score per visible user
+    seen_users = set()
+    game_2048_high_scores = []
+    for g in game_scores:
+        if g.user_id in seen_users:
+            continue
+        if not user_visible_on_leaderboard(g.user):
+            continue
+        seen_users.add(g.user_id)
+        game_2048_high_scores.append(
+            Game2048Entry(
+                username=g.user.name or "Anonymous",
+                score=g.score,
+                highest_tile=g.highest_tile,
+                avatar_url=g.user.avatar_url,
+            )
+        )
+        if len(game_2048_high_scores) >= 10:
+            break
+
     return LeaderboardResponse(
         best_norwood=best_norwood,
         worst_norwood=worst_norwood,
         insecurity_index=insecurity_index,
         cock_pleasure=cock_pleasure,
         cock_size=cock_size,
+        game_2048_high_scores=game_2048_high_scores,
     )

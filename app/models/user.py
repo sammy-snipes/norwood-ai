@@ -17,6 +17,7 @@ class User(Base, TimestampMixin):
     is_premium = Column(Boolean, default=False, nullable=False)
     is_admin = Column(Boolean, default=False, nullable=False)
     free_analyses_remaining = Column(Integer, default=1, nullable=False)
+    adult_content_enabled = Column(Boolean, default=False, nullable=False)
     options = Column(JSONB, default=dict, nullable=False)
 
     # Relationships
@@ -30,6 +31,9 @@ class User(Base, TimestampMixin):
     )
     cock_certifications = relationship(
         "CockCertification", back_populates="user", cascade="all, delete-orphan"
+    )
+    game_2048_scores = relationship(
+        "Game2048Score", back_populates="user", cascade="all, delete-orphan"
     )
 
     def __repr__(self) -> str:

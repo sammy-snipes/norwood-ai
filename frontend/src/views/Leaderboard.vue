@@ -1,10 +1,12 @@
 <script setup>
 import { ref, computed, onMounted } from 'vue'
 import { useAuthStore } from '../stores/auth'
+import { usePreferencesStore } from '../stores/preferences'
 import AppHeader from '../components/AppHeader.vue'
 import DonateToast from '../components/DonateToast.vue'
 
 const authStore = useAuthStore()
+const preferencesStore = usePreferencesStore()
 const API_URL = import.meta.env.DEV ? 'http://localhost:8000' : ''
 
 const loading = ref(true)
@@ -153,8 +155,34 @@ onMounted(() => {
             <p v-else class="text-gray-600 text-xs">No data yet</p>
           </div>
 
+          <!-- 2048 High Scores -->
+          <div class="bg-gray-800/50 rounded-lg p-5">
+            <h2 class="text-sm font-medium text-yellow-400 mb-4">Norwood 2048 High Scores</h2>
+            <p class="text-gray-500 text-xs mb-4">Top players in the baldness puzzle game</p>
+
+            <div v-if="leaderboard.game_2048_high_scores?.length" class="space-y-3">
+              <div
+                v-for="(entry, index) in leaderboard.game_2048_high_scores"
+                :key="index"
+                class="flex items-center gap-3"
+              >
+                <span class="text-gray-500 text-xs w-4">{{ index + 1 }}</span>
+                <img
+                  v-if="entry.avatar_url"
+                  :src="entry.avatar_url"
+                  class="w-6 h-6 rounded-full"
+                />
+                <div v-else class="w-6 h-6 rounded-full bg-gray-700"></div>
+                <span class="text-gray-300 text-sm flex-1 truncate">{{ entry.username }}</span>
+                <span class="text-yellow-400 font-bold">{{ entry.score.toLocaleString() }}</span>
+                <span class="text-gray-500 text-xs">(N{{ entry.highest_tile }})</span>
+              </div>
+            </div>
+            <p v-else class="text-gray-600 text-xs">No scores yet. Be the first to play!</p>
+          </div>
+
           <!-- Cock Power Rankings -->
-          <div class="grid grid-cols-2 gap-8">
+          <div v-if="preferencesStore.adultContentEnabled" class="grid grid-cols-2 gap-8">
             <!-- Pleasure Zone Rankings -->
             <div class="bg-gray-800/50 rounded-lg p-5">
               <h2 class="text-sm font-medium text-pink-400 mb-4">Cock Power: Pleasure</h2>
