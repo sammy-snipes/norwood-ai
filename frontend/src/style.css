@@ -6,11 +6,6 @@
     font-size: 13px;
     line-height: 1.6;
   }
-
-  /* Ensure header always has white text */
-  header {
-    color: white;
-  }
 }
 
 /* Custom scrollbar */
