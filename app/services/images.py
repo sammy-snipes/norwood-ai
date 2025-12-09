@@ -91,7 +91,9 @@ def process_image_for_claude(
     original_mode = img.mode
     width, height = img.size
 
-    logger.info(f"Image opened: format={original_format}, mode={original_mode}, size={width}x{height}")
+    logger.info(
+        f"Image opened: format={original_format}, mode={original_mode}, size={width}x{height}"
+    )
 
     # Convert RGBA to RGB for JPEG output
     if output_format == "JPEG" and img.mode in ("RGBA", "P"):
@@ -163,7 +165,9 @@ def process_base64_image_for_claude(
     Returns:
         Tuple of (base64_encoded_data, output_content_type)
     """
-    logger.info(f"Processing base64 image: content_type={content_type}, base64_len={len(base64_data)}")
+    logger.info(
+        f"Processing base64 image: content_type={content_type}, base64_len={len(base64_data)}"
+    )
     image_data = base64.b64decode(base64_data)
     return process_image_for_claude(
         image_data=image_data,
