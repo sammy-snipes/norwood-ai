@@ -44,6 +44,13 @@ def _load_secrets_from_aws(region: str = "us-east-1") -> dict[str, str]:
             result["STRIPE_SUCCESS_URL"] = secrets.stripe.success_url
             result["STRIPE_CANCEL_URL"] = secrets.stripe.cancel_url
 
+        if secrets.twitter:
+            result["TWITTER_API_KEY"] = secrets.twitter.api_key
+            result["TWITTER_API_SECRET"] = secrets.twitter.api_secret
+            result["TWITTER_ACCESS_TOKEN"] = secrets.twitter.access_token
+            result["TWITTER_ACCESS_TOKEN_SECRET"] = secrets.twitter.access_token_secret
+            result["TWITTER_BEARER_TOKEN"] = secrets.twitter.bearer_token
+
         return result
     except Exception as e:
         logger.warning(f"Failed to load secrets from AWS: {e}")
@@ -85,6 +92,13 @@ class Settings(BaseSettings):
     STRIPE_PUBLISHABLE_KEY: str = ""
     STRIPE_WEBHOOK_SECRET: str = ""
     STRIPE_PREMIUM_PRICE_ID: str = ""
+
+    # Twitter (loaded from secrets manager)
+    TWITTER_API_KEY: str = ""
+    TWITTER_API_SECRET: str = ""
+    TWITTER_ACCESS_TOKEN: str = ""
+    TWITTER_ACCESS_TOKEN_SECRET: str = ""
+    TWITTER_BEARER_TOKEN: str = ""
 
     # App config
     MAX_IMAGE_SIZE_MB: int = 10

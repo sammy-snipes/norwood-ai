@@ -19,6 +19,7 @@ class SecretNames:
     ANTHROPIC_API_KEY = "anthropic_api_key"
     JWT = "jwt"
     STRIPE = "stripe"
+    TWITTER = "twitter"
 
 
 @dataclass
@@ -35,6 +36,15 @@ class StripeCredentials:
     premium_price_id: str
     success_url: str
     cancel_url: str
+
+
+@dataclass
+class TwitterCredentials:
+    api_key: str
+    api_secret: str
+    access_token: str
+    access_token_secret: str
+    bearer_token: str
 
 
 @dataclass
@@ -61,6 +71,7 @@ class AppSecrets:
     anthropic_api_key: str | None = None
     jwt_secret_key: str | None = None
     stripe: StripeCredentials | None = None
+    twitter: TwitterCredentials | None = None
 
 
 class SecretsManagerService:
@@ -173,6 +184,19 @@ class SecretsManagerService:
             cancel_url=secret["cancel_url"],
         )
 
+    def get_twitter(self) -> TwitterCredentials:
+        """Get Twitter API credentials."""
+        secret = self._get_raw_secret(SecretNames.TWITTER)
+        if not isinstance(secret, dict):
+            raise ValueError(f"Expected JSON secret for {SecretNames.TWITTER}")
+        return TwitterCredentials(
+            api_key=secret["api_key"],
+            api_secret=secret["api_secret"],
+            access_token=secret["access_token"],
+            access_token_secret=secret["access_token_secret"],
+            bearer_token=secret["bearer_token"],
+        )
+
     def load_all(self) -> AppSecrets:
         """Load all application secrets."""
         secrets = AppSecrets()
@@ -206,6 +230,11 @@ class SecretsManagerService:
             secrets.stripe = self.get_stripe()
         except Exception as e:
             logger.warning(f"Failed to load Stripe credentials: {e}")
+
+        try:
+            secrets.twitter = self.get_twitter()
+        except Exception as e:
+            logger.warning(f"Failed to load Twitter credentials: {e}")
 
         return secrets
 

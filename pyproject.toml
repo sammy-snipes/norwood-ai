@@ -21,6 +21,7 @@ dependencies = [
     "pillow-heif>=0.18.0",
     "stripe>=8.0.0",
     "reportlab>=4.0.0",
+    "tweepy>=4.14.0",
 ]
 
 [project.optional-dependencies]
