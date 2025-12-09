@@ -12,6 +12,7 @@ import Leaderboard from '../views/Leaderboard.vue'
 import Settings from '../views/Settings.vue'
 import CheckoutSuccess from '../views/CheckoutSuccess.vue'
 import CheckoutCancel from '../views/CheckoutCancel.vue'
+import Game2048 from '../views/Game2048.vue'
 
 const routes = [
   {
@@ -78,6 +79,12 @@ const routes = [
     path: '/checkout/cancel',
     name: 'checkout-cancel',
     component: CheckoutCancel,
+    meta: { requiresAuth: true }
+  },
+  {
+    path: '/2048',
+    name: '2048',
+    component: Game2048,
     meta: { requiresAuth: true }
   }
 ]
