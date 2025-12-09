@@ -84,6 +84,7 @@ onMounted(() => {
                   <img
                     v-if="entry.avatar_url"
                     :src="entry.avatar_url"
+                    referrerpolicy="no-referrer"
                     class="w-6 h-6 rounded-full"
                   />
                   <div v-else class="w-6 h-6 rounded-full bg-gray-700"></div>
@@ -109,6 +110,7 @@ onMounted(() => {
                   <img
                     v-if="entry.avatar_url"
                     :src="entry.avatar_url"
+                    referrerpolicy="no-referrer"
                     class="w-6 h-6 rounded-full"
                   />
                   <div v-else class="w-6 h-6 rounded-full bg-gray-700"></div>
@@ -137,6 +139,7 @@ onMounted(() => {
                 <img
                   v-if="entry.avatar_url"
                   :src="entry.avatar_url"
+                  referrerpolicy="no-referrer"
                   class="w-6 h-6 rounded-full flex-shrink-0"
                 />
                 <div v-else class="w-6 h-6 rounded-full bg-gray-700 flex-shrink-0"></div>
@@ -170,6 +173,7 @@ onMounted(() => {
                   <img
                     v-if="entry.avatar_url"
                     :src="entry.avatar_url"
+                    referrerpolicy="no-referrer"
                     class="w-6 h-6 rounded-full"
                   />
                   <div v-else class="w-6 h-6 rounded-full bg-gray-700"></div>
@@ -195,6 +199,7 @@ onMounted(() => {
                   <img
                     v-if="entry.avatar_url"
                     :src="entry.avatar_url"
+                    referrerpolicy="no-referrer"
                     class="w-6 h-6 rounded-full"
                   />
                   <div v-else class="w-6 h-6 rounded-full bg-gray-700"></div>
