@@ -7,16 +7,9 @@ from pydantic import BaseModel
 from sqlalchemy.orm import Session
 
 from app.db import get_db
-from app.models import (
-    Certification,
-    CertificationPhoto,
-    CertificationStatus,
-    PhotoType,
-    User,
-    ValidationStatus,
-)
+from app.models import PhotoType, User
 from app.routers.auth import decode_token
-from app.services.s3 import S3Service
+from app.services import certification as certification_service
 from app.tasks.certification import (
     generate_certification_diagnosis_task,
     validate_certification_photo_task,
@@ -111,16 +104,6 @@ def require_premium(
     return user
 
 
-def check_certification_cooldown(user: User, db: Session) -> int | None:
-    """
-    Check if user can create a new certification.
-
-    Returns days remaining if on cooldown, None if can certify.
-    Currently disabled - unlimited certifications allowed.
-    """
-    return None
-
-
 # Routes
 @router.get("/cooldown")
 def get_cooldown(
@@ -128,7 +111,7 @@ def get_cooldown(
     db: Session = Depends(get_db),
 ):
     """Check if user is on certification cooldown."""
-    days_remaining = check_certification_cooldown(user, db)
+    days_remaining = certification_service.check_cooldown(user, db)
     return {
         "on_cooldown": days_remaining is not None and days_remaining > 0,
         "days_remaining": days_remaining if days_remaining and days_remaining > 0 else 0,
@@ -141,41 +124,14 @@ def start_certification(
     db: Session = Depends(get_db),
 ):
     """Start a new certification process."""
-    days_remaining = check_certification_cooldown(user, db)
+    days_remaining = certification_service.check_cooldown(user, db)
     if days_remaining is not None and days_remaining > 0:
         raise HTTPException(
             status_code=status.HTTP_429_TOO_MANY_REQUESTS,
             detail=f"You can only certify once per month. {days_remaining} days remaining.",
         )
 
-    # Check for incomplete certifications
-    incomplete = (
-        db.query(Certification)
-        .filter(
-            Certification.user_id == user.id,
-            Certification.status.in_(
-                [
-                    CertificationStatus.photos_pending,
-                    CertificationStatus.analyzing,
-                ]
-            ),
-        )
-        .first()
-    )
-
-    if incomplete:
-        # Return existing incomplete certification
-        return StartCertificationResponse(
-            certification_id=incomplete.id,
-            status=incomplete.status.value,
-        )
-
-    # Create new certification
-    certification = Certification(user_id=user.id)
-    db.add(certification)
-    db.commit()
-    db.refresh(certification)
-
+    certification, _ = certification_service.get_or_create(user, db)
     return StartCertificationResponse(
         certification_id=certification.id,
         status=certification.status.value,
@@ -191,55 +147,13 @@ def upload_photo(
     db: Session = Depends(get_db),
 ):
     """Upload and validate a certification photo."""
-    certification = (
-        db.query(Certification)
-        .filter(
-            Certification.id == cert_id,
-            Certification.user_id == user.id,
-        )
-        .first()
-    )
-
+    certification = certification_service.get_by_id(cert_id, user, db)
     if not certification:
         raise HTTPException(status_code=404, detail="Certification not found")
 
-    if certification.status != CertificationStatus.photos_pending:
-        raise HTTPException(status_code=400, detail="Certification is not accepting photos")
-
-    # Check if photo type already exists and is approved
-    existing = (
-        db.query(CertificationPhoto)
-        .filter(
-            CertificationPhoto.certification_id == cert_id,
-            CertificationPhoto.photo_type == photo_type,
-        )
-        .first()
-    )
-
-    if existing and existing.validation_status == ValidationStatus.approved:
-        raise HTTPException(
-            status_code=400,
-            detail=f"{photo_type.value} photo already approved",
-        )
-
-    # Delete existing photo if retaking
-    if existing:
-        try:
-            s3 = S3Service()
-            s3.delete_image(existing.s3_key)
-        except Exception:
-            pass
-        db.delete(existing)
-        db.commit()
-
-    # Create photo record (s3_key will be set by the task after processing)
-    photo = CertificationPhoto(
-        certification_id=cert_id,
-        photo_type=photo_type,
-    )
-    db.add(photo)
-    db.commit()
-    db.refresh(photo)
+    photo, error = certification_service.prepare_photo_upload(certification, photo_type, db)
+    if error:
+        raise HTTPException(status_code=400, detail=error)
 
     # Queue validation task (processes image, uploads to S3, validates)
     task = validate_certification_photo_task.delay(
@@ -251,10 +165,7 @@ def upload_photo(
         cert_id,
     )
 
-    return PhotoUploadResponse(
-        photo_id=photo.id,
-        task_id=task.id,
-    )
+    return PhotoUploadResponse(photo_id=photo.id, task_id=task.id)
 
 
 @router.get("/{cert_id}/status", response_model=CertificationStatusResponse)
@@ -264,47 +175,16 @@ def get_certification_status(
     db: Session = Depends(get_db),
 ):
     """Get current certification status."""
-    certification = (
-        db.query(Certification)
-        .filter(
-            Certification.id == cert_id,
-            Certification.user_id == user.id,
-        )
-        .first()
-    )
-
+    certification = certification_service.get_by_id(cert_id, user, db)
     if not certification:
         raise HTTPException(status_code=404, detail="Certification not found")
 
-    photos = [
-        PhotoStatusResponse(
-            photo_id=p.id,
-            photo_type=p.photo_type.value,
-            validation_status=p.validation_status.value,
-            rejection_reason=p.rejection_reason,
-            quality_notes=p.quality_notes,
-        )
-        for p in certification.photos
-    ]
-
-    pdf_url = None
-    if certification.pdf_s3_key:
-        try:
-            s3 = S3Service()
-            pdf_url = s3.get_presigned_url(certification.pdf_s3_key)
-        except Exception:
-            pass
-
+    status_data = certification_service.get_status(certification)
     return CertificationStatusResponse(
-        certification_id=certification.id,
-        status=certification.status.value,
-        photos=photos,
-        norwood_stage=certification.norwood_stage,
-        norwood_variant=certification.norwood_variant,
-        confidence=certification.confidence,
-        clinical_assessment=certification.clinical_assessment,
-        pdf_url=pdf_url,
-        certified_at=certification.certified_at,
+        **{
+            **status_data,
+            "photos": [PhotoStatusResponse(**p) for p in status_data["photos"]],
+        }
     )
 
 
@@ -315,39 +195,15 @@ def trigger_diagnosis(
     db: Session = Depends(get_db),
 ):
     """Trigger final diagnosis after all photos are approved."""
-    certification = (
-        db.query(Certification)
-        .filter(
-            Certification.id == cert_id,
-            Certification.user_id == user.id,
-        )
-        .first()
-    )
-
+    certification = certification_service.get_by_id(cert_id, user, db)
     if not certification:
         raise HTTPException(status_code=404, detail="Certification not found")
 
-    if certification.status != CertificationStatus.photos_pending:
-        raise HTTPException(status_code=400, detail="Certification already processing or complete")
+    error = certification_service.validate_can_diagnose(certification)
+    if error:
+        raise HTTPException(status_code=400, detail=error)
 
-    # Check all photos are approved
-    approved_types = {
-        p.photo_type
-        for p in certification.photos
-        if p.validation_status == ValidationStatus.approved
-    }
-    required = {PhotoType.front, PhotoType.left, PhotoType.right}
-
-    if approved_types != required:
-        missing = required - approved_types
-        raise HTTPException(
-            status_code=400,
-            detail=f"Missing approved photos: {[t.value for t in missing]}",
-        )
-
-    # Queue diagnosis task
     task = generate_certification_diagnosis_task.delay(certification.id)
-
     return DiagnoseResponse(task_id=task.id)
 
 
@@ -358,24 +214,15 @@ def download_pdf(
     db: Session = Depends(get_db),
 ):
     """Get presigned URL for PDF download."""
-    certification = (
-        db.query(Certification)
-        .filter(
-            Certification.id == cert_id,
-            Certification.user_id == user.id,
-        )
-        .first()
-    )
-
+    certification = certification_service.get_by_id(cert_id, user, db)
     if not certification:
         raise HTTPException(status_code=404, detail="Certification not found")
 
-    if not certification.pdf_s3_key:
+    pdf_url = certification_service.get_pdf_url(certification)
+    if not pdf_url:
         raise HTTPException(status_code=404, detail="PDF not yet generated")
 
-    s3 = S3Service()
-    url = s3.get_presigned_url(certification.pdf_s3_key, expires_in=3600)
-    return {"pdf_url": url}
+    return {"pdf_url": pdf_url}
 
 
 @router.get("/history", response_model=list[CertificationHistoryItem])
@@ -384,27 +231,8 @@ def get_certification_history(
     db: Session = Depends(get_db),
 ):
     """Get user's certification history."""
-    certifications = (
-        db.query(Certification)
-        .filter(
-            Certification.user_id == user.id,
-            Certification.status == CertificationStatus.completed,
-        )
-        .order_by(Certification.certified_at.desc())
-        .all()
-    )
-
-    s3 = S3Service()
-    return [
-        CertificationHistoryItem(
-            id=c.id,
-            norwood_stage=c.norwood_stage,
-            norwood_variant=c.norwood_variant,
-            certified_at=c.certified_at,
-            pdf_url=s3.get_presigned_url(c.pdf_s3_key) if c.pdf_s3_key else None,
-        )
-        for c in certifications
-    ]
+    history = certification_service.get_history(user, db)
+    return [CertificationHistoryItem(**item) for item in history]
 
 
 @router.get("/public/{cert_id}")
@@ -413,23 +241,10 @@ def get_public_certification(
     db: Session = Depends(get_db),
 ):
     """Get public certification info (no auth required)."""
-    certification = (
-        db.query(Certification)
-        .filter(
-            Certification.id == cert_id,
-            Certification.status == CertificationStatus.completed,
-        )
-        .first()
-    )
-
-    if not certification:
+    info = certification_service.get_public_info(cert_id, db)
+    if not info:
         raise HTTPException(status_code=404, detail="Certification not found")
-
-    return {
-        "norwood_stage": certification.norwood_stage,
-        "norwood_variant": certification.norwood_variant,
-        "certified_at": certification.certified_at,
-    }
+    return info
 
 
 @router.delete("/{cert_id}")
@@ -439,34 +254,7 @@ def delete_certification(
     db: Session = Depends(get_db),
 ):
     """Delete a certification."""
-    certification = (
-        db.query(Certification)
-        .filter(
-            Certification.id == cert_id,
-            Certification.user_id == user.id,
-        )
-        .first()
-    )
-
-    if not certification:
+    deleted = certification_service.delete_with_cleanup(cert_id, user, db)
+    if not deleted:
         raise HTTPException(status_code=404, detail="Certification not found")
-
-    # Delete photos from S3
-    s3 = S3Service()
-    for photo in certification.photos:
-        try:
-            s3.delete_image(photo.s3_key)
-        except Exception:
-            pass
-
-    # Delete PDF if exists
-    if certification.pdf_s3_key:
-        try:
-            s3.delete_image(certification.pdf_s3_key)
-        except Exception:
-            pass
-
-    db.delete(certification)
-    db.commit()
-
     return {"success": True}

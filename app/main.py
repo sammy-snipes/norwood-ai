@@ -13,7 +13,7 @@ from starlette import status as http_status
 from app.celery_worker import celery_app
 from app.config import get_settings
 from app.db import get_db
-from app.models import Analysis, User
+from app.models import User
 from app.routers import (
     auth_router,
     certification_router,
@@ -32,6 +32,7 @@ from app.schemas import (
     TaskResponse,
     TaskStatusResponse,
 )
+from app.services import analysis as analysis_service
 from app.tasks.analyze import analyze_image_task
 
 settings = get_settings()
@@ -128,36 +129,17 @@ async def submit_analysis(
 
     Free users get 1 analysis. Premium users get unlimited analyses.
     """
-    logger.info(
-        f"[DEBUG] Received analyze request - file: {file.filename}, type: {file.content_type}, user: {user.email}"
-    )
+    logger.info(f"[DEBUG] Received analyze request - file: {file.filename}, user: {user.email}")
 
-    # Check if user can analyze (admin or premium = unlimited, otherwise need free analyses)
-    can_analyze = user.is_admin or user.is_premium or user.free_analyses_remaining > 0
-    if not can_analyze:
+    # Check quota
+    if not analysis_service.check_can_analyze(user):
         raise HTTPException(
             status_code=http_status.HTTP_402_PAYMENT_REQUIRED,
             detail="No analyses remaining. Upgrade to premium for unlimited analyses.",
         )
 
-    # Decrement free analyses for non-premium users
-    if not user.is_admin and not user.is_premium:
-        user.free_analyses_remaining -= 1
-        db.commit()
-        logger.info(
-            f"[DEBUG] User {user.id} has {user.free_analyses_remaining} free analyses remaining"
-        )
-
-    # Validate file type (including HEIC which will be converted)
-    allowed_types = [
-        "image/jpeg",
-        "image/png",
-        "image/gif",
-        "image/webp",
-        "image/heic",
-        "image/heif",
-    ]
-    if file.content_type not in allowed_types:
+    # Validate file type
+    if not analysis_service.validate_image_type(file.content_type):
         raise HTTPException(
             status_code=http_status.HTTP_400_BAD_REQUEST,
             detail=f"Unsupported image type: {file.content_type}. Use JPEG, PNG, GIF, WebP, or HEIC.",
@@ -165,11 +147,14 @@ async def submit_analysis(
 
     # Read and validate file size
     contents = await file.read()
-    if len(contents) > settings.max_image_size_bytes:
+    if not analysis_service.validate_image_size(len(contents)):
         raise HTTPException(
             status_code=http_status.HTTP_400_BAD_REQUEST,
             detail=f"Image too large. Maximum size is {settings.MAX_IMAGE_SIZE_MB}MB.",
         )
+
+    # Consume quota
+    analysis_service.consume_analysis_quota(user, db)
 
     # Encode image to base64 and submit to Celery (processing happens in worker)
     image_base64 = base64.standard_b64encode(contents).decode("utf-8")
@@ -254,29 +239,8 @@ def get_analysis_history(
     Returns analyses sorted by most recent first.
     Image URLs are presigned S3 URLs valid for 1 hour.
     """
-    from app.services.s3 import S3Service
-
-    analyses = (
-        db.query(Analysis)
-        .filter(Analysis.user_id == user.id)
-        .order_by(Analysis.created_at.desc())
-        .limit(limit)
-        .all()
-    )
-
-    # Generate presigned URLs for images
-    s3 = S3Service() if settings.S3_BUCKET_NAME else None
-    result = []
-    for analysis in analyses:
-        item = AnalysisHistoryItem.model_validate(analysis)
-        if analysis.image_url and s3:
-            try:
-                item.image_url = s3.get_presigned_url(analysis.image_url)
-            except Exception:
-                item.image_url = None
-        result.append(item)
-
-    return result
+    history = analysis_service.get_history_with_urls(user, db, limit)
+    return [AnalysisHistoryItem(**item) for item in history]
 
 
 @app.delete("/api/analyses/{analysis_id}")
@@ -286,26 +250,9 @@ def delete_analysis(
     db: Session = Depends(get_db),
 ):
     """Delete an analysis and its S3 image."""
-    from app.services.s3 import S3Service
-
-    analysis = (
-        db.query(Analysis).filter(Analysis.id == analysis_id, Analysis.user_id == user.id).first()
-    )
-
-    if not analysis:
+    deleted = analysis_service.delete_with_cleanup(analysis_id, user, db)
+    if not deleted:
         raise HTTPException(status_code=404, detail="Analysis not found")
-
-    # Delete image from S3 if exists
-    if analysis.image_url and settings.S3_BUCKET_NAME:
-        try:
-            s3 = S3Service()
-            s3.delete_image(analysis.image_url)
-        except Exception:
-            pass  # Don't fail if S3 delete fails
-
-    db.delete(analysis)
-    db.commit()
-
     return {"success": True}
 
 
