@@ -1,6 +1,10 @@
 <script setup>
-import { ref, reactive, computed, onMounted, onUnmounted, nextTick } from 'vue'
+import { ref, onMounted, onUnmounted } from 'vue'
 import AppHeader from '../components/AppHeader.vue'
+import { useAuthStore } from '../stores/auth'
+
+const authStore = useAuthStore()
+const API_URL = import.meta.env.DEV ? 'http://localhost:8000' : ''
 
 // Game constants
 const SIZE = 4
@@ -23,6 +27,7 @@ const score = ref(0)
 const bestScore = ref(parseInt(localStorage.getItem('norwood2048_best') || '0'))
 const gameOver = ref(false)
 const gameWon = ref(false)
+const hasWon = ref(false) // Track if player ever reached win condition this game
 const keepPlaying = ref(false)
 const showDonateToast = ref(false)
 const isMoving = ref(false)
@@ -219,6 +224,7 @@ const move = (direction) => {
         // Check win condition
         if (merged.value === WIN_VALUE && !keepPlaying.value) {
           gameWon.value = true
+          hasWon.value = true
         }
 
         moved = true
@@ -253,6 +259,9 @@ const move = (direction) => {
       // Check game over
       if (!movesAvailable()) {
         gameOver.value = true
+        // Submit final score to backend (hasWon tracks if they ever reached Norwood 7)
+        submitScore(score.value, getHighestTile(), hasWon.value)
+        clearGameState()
       }
     }, 100)
   }
@@ -274,7 +283,8 @@ const movesAvailable = () => {
         const nextX = x + dir.x
         const nextY = y + dir.y
         const next = cellContent(nextX, nextY)
-        if (next && next.value === tile.value) {
+        // Can merge if same value AND not already at max (Norwood 7 can't merge)
+        if (next && next.value === tile.value && tile.value < WIN_VALUE) {
           return true
         }
       }
@@ -291,11 +301,15 @@ const newGame = () => {
   score.value = 0
   gameOver.value = false
   gameWon.value = false
+  hasWon.value = false
   keepPlaying.value = false
   tileId = 0
 
   addRandomTile()
   addRandomTile()
+
+  // Clear any saved state
+  clearGameState()
 }
 
 // Continue playing after win
@@ -358,13 +372,113 @@ const getTileStyle = (tile) => {
   }
 }
 
+// Get highest tile value on the board
+const getHighestTile = () => {
+  let highest = 0
+  for (const tile of tiles.value) {
+    if (tile.value > highest) {
+      highest = tile.value
+    }
+  }
+  return highest
+}
+
+// Submit score to backend
+const submitScore = async (finalScore, highestTile, isWin) => {
+  if (!authStore.token) return
+
+  try {
+    await fetch(`${API_URL}/api/2048/scores`, {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${authStore.token}`,
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({
+        score: finalScore,
+        highest_tile: highestTile,
+        is_win: isWin
+      })
+    })
+  } catch (err) {
+    console.error('Failed to submit score:', err)
+  }
+}
+
+// Save game state to localStorage
+const saveGameState = () => {
+  const state = {
+    grid: grid.value.map(row => row.map(cell => cell ? { value: cell.value, x: cell.x, y: cell.y } : null)),
+    tiles: tiles.value.map(t => ({ id: t.id, x: t.x, y: t.y, value: t.value })),
+    score: score.value,
+    gameOver: gameOver.value,
+    gameWon: gameWon.value,
+    hasWon: hasWon.value,
+    keepPlaying: keepPlaying.value,
+    tileId: tileId
+  }
+  localStorage.setItem('norwood2048_state', JSON.stringify(state))
+}
+
+// Load game state from localStorage
+const loadGameState = () => {
+  const saved = localStorage.getItem('norwood2048_state')
+  if (!saved) return false
+
+  try {
+    const state = JSON.parse(saved)
+
+    // Restore grid
+    grid.value = createGrid()
+    tiles.value = []
+    tileId = state.tileId || 0
+
+    // Recreate tiles from saved state
+    for (const savedTile of state.tiles) {
+      const tile = {
+        id: savedTile.id,
+        x: savedTile.x,
+        y: savedTile.y,
+        value: savedTile.value,
+        isNew: false,
+        mergedFrom: null
+      }
+      grid.value[tile.y][tile.x] = tile
+      tiles.value.push(tile)
+    }
+
+    score.value = state.score || 0
+    gameOver.value = state.gameOver || false
+    gameWon.value = state.gameWon || false
+    hasWon.value = state.hasWon || false
+    keepPlaying.value = state.keepPlaying || false
+
+    return true
+  } catch (err) {
+    console.error('Failed to load game state:', err)
+    return false
+  }
+}
+
+// Clear saved game state
+const clearGameState = () => {
+  localStorage.removeItem('norwood2048_state')
+}
+
 onMounted(() => {
-  newGame()
+  // Try to restore saved game, otherwise start new
+  if (!loadGameState()) {
+    newGame()
+  }
   window.addEventListener('keydown', handleKeydown)
 })
 
 onUnmounted(() => {
   window.removeEventListener('keydown', handleKeydown)
+  // Save game state when navigating away
+  if (!gameOver.value) {
+    saveGameState()
+  }
 })
 </script>
 

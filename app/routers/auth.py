@@ -41,6 +41,7 @@ class UserResponse(BaseModel):
     is_premium: bool
     is_admin: bool
     free_analyses_remaining: int
+    adult_content_enabled: bool = False
     options: UserOptionsResponse = UserOptionsResponse()
 
     model_config = {"from_attributes": True}
@@ -57,6 +58,7 @@ class UserResponse(BaseModel):
             is_premium=user.is_premium,
             is_admin=user.is_admin,
             free_analyses_remaining=user.free_analyses_remaining,
+            adult_content_enabled=user.adult_content_enabled,
             options=UserOptionsResponse(**opts),
         )
 
@@ -360,6 +362,46 @@ def set_leaderboard_visibility(
     options["show_on_leaderboard"] = request.visible
     user.options = options
     flag_modified(user, "options")
+    db.commit()
+
+    return {"success": True}
+
+
+class AdultContentRequest(BaseModel):
+    enabled: bool
+
+
+@router.post("/adult-content")
+def set_adult_content(
+    request: AdultContentRequest,
+    authorization: str | None = Header(None),
+    db: Session = Depends(get_db),
+):
+    """Set whether adult content is enabled for the user."""
+    if not authorization or not authorization.startswith("Bearer "):
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Not authenticated",
+        )
+
+    token = authorization.replace("Bearer ", "")
+    user_id = decode_token(token)
+
+    if not user_id:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Invalid token",
+        )
+
+    user = db.query(User).filter(User.id == user_id).first()
+
+    if not user:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="User not found",
+        )
+
+    user.adult_content_enabled = request.enabled
     db.commit()
 
     return {"success": True}

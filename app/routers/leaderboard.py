@@ -4,6 +4,7 @@ import statistics
 
 from fastapi import APIRouter, Depends, Header, HTTPException, status
 from pydantic import BaseModel
+from sqlalchemy import Boolean, func
 from sqlalchemy.orm import Session
 
 from app.db import get_db
@@ -14,6 +15,7 @@ from app.models import (
     CockCertification,
     CockCertificationStatus,
     CounselingSession,
+    Game2048Score,
     User,
 )
 from app.routers.auth import decode_token
@@ -48,12 +50,20 @@ class CockSizeEntry(BaseModel):
     avatar_url: str | None = None
 
 
+class Game2048Entry(BaseModel):
+    username: str
+    score: int
+    highest_tile: int
+    avatar_url: str | None = None
+
+
 class LeaderboardResponse(BaseModel):
     best_norwood: list[NorwoodEntry]
     worst_norwood: list[NorwoodEntry]
     insecurity_index: list[InsecurityEntry]
     cock_pleasure: list[CockPleasureEntry]
     cock_size: list[CockSizeEntry]
+    game_2048_high_scores: list[Game2048Entry]
 
 
 # Insecurity scoring weights
@@ -284,10 +294,53 @@ def get_leaderboard(
         for c in size_sorted
     ]
 
+    # 2048 High Scores - get best score per user using efficient SQL
+    # Subquery to get max score per user
+    best_score_subquery = (
+        db.query(
+            Game2048Score.user_id,
+            func.max(Game2048Score.score).label("max_score"),
+        )
+        .group_by(Game2048Score.user_id)
+        .subquery()
+    )
+
+    # Join to get full score records, filter visibility in SQL, limit to 10
+    top_scores = (
+        db.query(Game2048Score, User)
+        .join(
+            best_score_subquery,
+            (Game2048Score.user_id == best_score_subquery.c.user_id)
+            & (Game2048Score.score == best_score_subquery.c.max_score),
+        )
+        .join(User, Game2048Score.user_id == User.id)
+        .filter(
+            # JSONB check: show_on_leaderboard is true or not set (default true)
+            func.coalesce(
+                User.options["show_on_leaderboard"].astext.cast(Boolean),
+                True,
+            ).is_(True)
+        )
+        .order_by(Game2048Score.score.desc())
+        .limit(10)
+        .all()
+    )
+
+    game_2048_high_scores = [
+        Game2048Entry(
+            username=u.name or "Anonymous",
+            score=score.score,
+            highest_tile=score.highest_tile,
+            avatar_url=u.avatar_url,
+        )
+        for score, u in top_scores
+    ]
+
     return LeaderboardResponse(
         best_norwood=best_norwood,
         worst_norwood=worst_norwood,
         insecurity_index=insecurity_index,
         cock_pleasure=cock_pleasure,
         cock_size=cock_size,
+        game_2048_high_scores=game_2048_high_scores,
     )

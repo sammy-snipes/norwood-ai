@@ -40,6 +40,25 @@ const showOnLeaderboard = computed({
   }
 })
 
+const adultContentEnabled = computed({
+  get: () => authStore.user?.adult_content_enabled ?? false,
+  set: async (value) => {
+    try {
+      await fetch(`${API_URL}/api/auth/adult-content`, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${authStore.token}`,
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({ enabled: value })
+      })
+      await authStore.fetchUser()
+    } catch (err) {
+      console.error('Failed to update adult content setting:', err)
+    }
+  }
+})
+
 const handleLogout = () => {
   authStore.logout()
   router.push('/')
@@ -151,6 +170,20 @@ const upgradeToPremium = async () => {
             />
             <span class="text-xs text-gray-400">Appear on leaderboard</span>
           </label>
+        </div>
+
+        <!-- Ages 11+ Content -->
+        <div class="p-4 bg-gray-800/50 rounded-lg border border-pink-900/30">
+          <h3 class="text-xs font-medium mb-3 text-pink-400">Ages 11+</h3>
+          <label class="flex items-center gap-2 cursor-pointer">
+            <input
+              type="checkbox"
+              v-model="adultContentEnabled"
+              class="w-3 h-3 accent-pink-500"
+            />
+            <span class="text-xs text-gray-400">Enable "Rate My Cock" feature</span>
+          </label>
+          <p class="mt-2 text-xs text-gray-600">Shows rooster content in navigation and leaderboard</p>
         </div>
 
         <!-- The Criticism -->
