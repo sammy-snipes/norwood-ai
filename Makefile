@@ -156,6 +156,11 @@ run-celery: ensure-redis
 	@echo "Starting Celery worker..."
 	uv run celery -A app.celery_worker.celery_app worker --loglevel=info --concurrency=2
 
+.PHONY: run-celery-beat
+run-celery-beat: ensure-redis
+	@echo "Starting Celery Beat scheduler..."
+	uv run celery -A app.celery_worker.celery_app beat --loglevel=info
+
 .PHONY: run-frontend
 run-frontend:
 	@echo "Starting Vue frontend dev server (for development with hot reload)..."
