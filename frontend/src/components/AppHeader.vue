@@ -101,6 +101,13 @@ onUnmounted(() => {
           >
             2048
           </router-link>
+          <router-link
+            to="/forum"
+            class="text-xs transition-colors"
+            :class="$route.path.startsWith('/forum') ? 'text-gray-400' : 'text-gray-500 hover:text-gray-300'"
+          >
+            Forum
+          </router-link>
         </nav>
       </div>
 

@@ -13,6 +13,8 @@ import Settings from '../views/Settings.vue'
 import CheckoutSuccess from '../views/CheckoutSuccess.vue'
 import CheckoutCancel from '../views/CheckoutCancel.vue'
 import Game2048 from '../views/Game2048.vue'
+import Forum from '../views/Forum.vue'
+import ForumThread from '../views/ForumThread.vue'
 
 const routes = [
   {
@@ -85,6 +87,18 @@ const routes = [
     path: '/2048',
     name: '2048',
     component: Game2048,
+    meta: { requiresAuth: true }
+  },
+  {
+    path: '/forum',
+    name: 'forum',
+    component: Forum,
+    meta: { requiresAuth: true }
+  },
+  {
+    path: '/forum/:threadId',
+    name: 'forum-thread',
+    component: ForumThread,
     meta: { requiresAuth: true }
   }
 ]

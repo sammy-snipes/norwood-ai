@@ -19,6 +19,7 @@ from app.routers import (
     certification_router,
     cock_router,
     counseling_router,
+    forum_router,
     game2048_router,
     leaderboard_router,
 )
@@ -65,6 +66,7 @@ app.include_router(cock_router)
 app.include_router(game2048_router)
 app.include_router(payments_router)
 app.include_router(leaderboard_router)
+app.include_router(forum_router)
 
 # Serve static frontend files if they exist (built Vue app)
 STATIC_DIR = FilePath(__file__).parent.parent / "frontend" / "dist"

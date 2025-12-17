@@ -17,6 +17,7 @@ celery_app = Celery(
         "app.tasks.analyze",
         "app.tasks.counseling",
         "app.tasks.certification",
+        "app.tasks.forum",
     ],
 )
 
@@ -27,6 +28,12 @@ celery_app.conf.update(
     result_serializer="json",
     accept_content=["json"],
     result_expires=3600,  # Results expire after 1 hour
+    beat_schedule={
+        "check-forum-agent-schedules": {
+            "task": "check_forum_agent_schedules",
+            "schedule": 60.0,  # Every 60 seconds
+        },
+    },
 )
 
 # Reduce verbosity of task success logs (don't print full return value)

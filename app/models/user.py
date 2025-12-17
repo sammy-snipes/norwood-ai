@@ -35,6 +35,10 @@ class User(Base, TimestampMixin):
     game_2048_scores = relationship(
         "Game2048Score", back_populates="user", cascade="all, delete-orphan"
     )
+    forum_threads = relationship(
+        "ForumThread", back_populates="user", cascade="all, delete-orphan"
+    )
+    forum_replies = relationship("ForumReply", back_populates="user")
 
     def __repr__(self) -> str:
         return f"<User {self.email}>"
